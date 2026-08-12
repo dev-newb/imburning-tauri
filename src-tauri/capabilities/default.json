@@ -14,8 +14,21 @@
     "core:window:allow-inner-size",
     "core:window:allow-outer-position",
     "core:window:allow-scale-factor",
-    "opener:allow-open-url",
     "notification:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    {
+      "identifier": "opener:allow-open-url",
+      "comment": "allow-open-url grants the command with NO scope, and the plugin's scope check is any() over an empty allow list — i.e. every URL rejected. The scope has to be spelled out, and it mirrors the shim's allowlist exactly.",
+      "allow": [
+        { "url": "https://claude.ai/*" },
+        { "url": "https://*.claude.ai/*" },
+        { "url": "https://github.com/*" },
+        { "url": "https://*.github.com/*" },
+        { "url": "https://paypal.me/*" },
+        { "url": "https://*.paypal.me/*" },
+        { "url": "https://buymeacoffee.com/*" },
+        { "url": "https://*.buymeacoffee.com/*" }
+      ]
+    }
   ]
 }

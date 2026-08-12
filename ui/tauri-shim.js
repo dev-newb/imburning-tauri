@@ -48,7 +48,15 @@
     // ---- window controls ----
     minimizeWindow: () => invoke('minimize_window'),
     closeWindow: () => invoke('close_window'),
-    resizeWindow: (height) => invoke('resize_window', { height: Number(height) || 0 }),
+    // force / fitPreset / userAction are the guard that stops a background
+    // refit collapsing a hand-sized window — dropping them is not harmless.
+    resizeWindow: (height, force, fitPreset, userAction) =>
+      invoke('resize_window', {
+        height: Number(height) || 0,
+        force: force === true,
+        fitPreset: fitPreset === true,
+        userAction: userAction === true
+      }),
     fitLandscapeWidth: (width) => invoke('fit_landscape_width', { width: Number(width) || 0 }),
     setMinHeight: (h) => invoke('set_min_height', { height: Number(h) || 180 }),
     getWindowPosition: () => invoke('get_window_position'),
@@ -118,13 +126,16 @@
       if (!granted) granted = (await api.requestPermission()) === 'granted';
       if (granted) api.sendNotification({ title, body });
     },
-    sendAlertWebhook: noop,
+    sendAlertWebhook: (event, title, message) =>
+      invoke('send_alert_webhook', {
+        event: String(event || ''), title: String(title || ''), message: String(message || '')
+      }),
 
     // ---- layout ----
     setCompactMode: (compact) => invoke('set_compact_mode', { compact: compact === true }),
     settingsFit: (height) => invoke('resize_window', { height: Number(height) || 0 }),
     settingsRestore: noop,
-    applyWindowPreset: noop,
+    applyWindowPreset: (preset) => invoke('apply_window_preset', { preset: String(preset || '') }),
 
     // ---- detachable graph window (not yet ported) ----
     openGraphWindow: noop,

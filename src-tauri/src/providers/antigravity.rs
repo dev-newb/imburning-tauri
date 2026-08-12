@@ -44,14 +44,37 @@ pub fn read_keychain_token() -> Option<Token> {
     if std::env::consts::OS != "macos" {
         return None;
     }
-    let out = Command::new("security")
+    // `security` can block indefinitely — a locked keychain makes it wait on a
+    // prompt. Unbounded, that pins a thread for the life of the process, so
+    // give it a deadline and kill it.
+    let mut child = Command::new("security")
         .args(["find-generic-password", "-s", "gemini", "-a", "antigravity", "-w"])
-        .output()
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
         .ok()?;
-    if !out.status.success() {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(25));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Err(_) => return None,
+        }
+    };
+    if !status.success() {
         return None;
     }
-    let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let mut stdout = String::new();
+    use std::io::Read;
+    child.stdout.as_mut()?.read_to_string(&mut stdout).ok()?;
+    let raw = stdout.trim().to_string();
     if raw.is_empty() {
         return None;
     }
@@ -93,9 +116,45 @@ pub fn agy_binary() -> Option<std::path::PathBuf> {
 /// The OAuth client lives inside the agy binary. Scan for it rather than
 /// embedding a secret in this source tree — when agy rotates its client, a
 /// reinstall of agy is the only thing needed to keep this working.
+///
+/// Cached for the process lifetime, keyed on the binary's size+mtime so an agy
+/// update is still picked up. The scan reads and regex-sweeps a ~170MB file;
+/// doing that on every hourly token refresh is minutes of pointless I/O over a
+/// long-running session, and it would run on the async runtime.
 fn oauth_clients() -> Vec<(String, String)> {
+    use std::sync::Mutex;
+    static CACHE: Mutex<Option<((u64, i64), Vec<(String, String)>)>> = Mutex::new(None);
+
     let Some(bin) = agy_binary() else { return vec![] };
-    let Ok(bytes) = std::fs::read(&bin) else { return vec![] };
+    let stamp = std::fs::metadata(&bin)
+        .ok()
+        .map(|m| {
+            let mtime = m
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0);
+            (m.len(), mtime)
+        })
+        .unwrap_or((0, 0));
+    if let Ok(cache) = CACHE.lock() {
+        if let Some((cached_stamp, pairs)) = cache.as_ref() {
+            if *cached_stamp == stamp {
+                return pairs.clone();
+            }
+        }
+    }
+
+    let pairs = scan_oauth_clients(&bin);
+    if let Ok(mut cache) = CACHE.lock() {
+        *cache = Some((stamp, pairs.clone()));
+    }
+    pairs
+}
+
+fn scan_oauth_clients(bin: &std::path::Path) -> Vec<(String, String)> {
+    let Ok(bytes) = std::fs::read(bin) else { return vec![] };
     let text = String::from_utf8_lossy(&bytes);
     let id_re = regex::Regex::new(r"[0-9]{10,}-[a-z0-9]+\.apps\.googleusercontent\.com").unwrap();
     let secret_re = regex::Regex::new(r"GOCSPX-[A-Za-z0-9_-]{28}").unwrap();
@@ -123,7 +182,8 @@ static WORKING_CLIENT: std::sync::Mutex<Option<(String, String)>> = std::sync::M
 
 async fn refresh_token(client: &reqwest::Client, refresh: &str) -> Option<String> {
     let known = WORKING_CLIENT.lock().ok().and_then(|g| g.clone());
-    let mut candidates = oauth_clients();
+    // First call reads a ~170MB binary; keep that off the async runtime.
+    let mut candidates = tokio::task::spawn_blocking(oauth_clients).await.ok()?;
     if let Some(known) = &known {
         candidates.sort_by_key(|c| c != known);
     }
@@ -272,13 +332,17 @@ pub fn normalize(json: &Value) -> Option<ProviderData> {
     let mut foreign = vec![];
     for (model_id, m) in models {
         let Some(qi) = m.get("quotaInfo") else { continue };
-        let Some(fraction) = qi.get("remainingFraction").and_then(|v| v.as_f64()) else { continue };
         if model_id.starts_with("chat_") || model_id.starts_with("tab_") {
             continue; // internal editor pseudo-models
         }
         let Some(reset) = qi.get("resetTime").and_then(|v| v.as_str()) else {
             continue; // unmetered helpers report a bare fraction of 1
         };
+        // A METERED pool (it has a resetTime) with no remainingFraction is
+        // exhausted, not unknown: proto3 JSON omits a scalar sitting at its
+        // default, so 0.0 remaining can arrive as an absent field. Dropping it
+        // would hide the row at exactly the moment worth warning about.
+        let fraction = qi.get("remainingFraction").and_then(|v| v.as_f64()).unwrap_or(0.0);
         let display = m.get("displayName").and_then(|v| v.as_str());
         let entry = Entry {
             label: label_for(display, model_id),
@@ -331,6 +395,9 @@ fn last_good(store: &crate::store::Store) -> Option<ProviderData> {
 /// user an empty Google section every time that happens.
 pub async fn fetch(client: &reqwest::Client, store: &crate::store::Store) -> Option<ProviderData> {
     let saved = last_good(store);
+    // Everything below that touches the filesystem or spawns `security` is
+    // blocking; it runs on spawn_blocking rather than stalling the async
+    // runtime that is concurrently driving the other providers' HTTP.
 
     // Inside the floor, serve last-good without touching the network.
     let recent = LAST_ATTEMPT
@@ -363,7 +430,7 @@ pub async fn fetch(client: &reqwest::Client, store: &crate::store::Store) -> Opt
 }
 
 async fn fetch_live(client: &reqwest::Client) -> Option<ProviderData> {
-    let token = read_keychain_token()?;
+    let token = tokio::task::spawn_blocking(read_keychain_token).await.ok()??;
     let now = chrono::Utc::now().timestamp_millis();
     let mut access = match &token.access {
         Some(a) if token.expiry_ms - now > 60_000 => Some(a.clone()),

@@ -41,7 +41,13 @@ fn get_settings(state: State<'_, std::sync::Arc<AppState>>) -> Value {
 }
 
 #[tauri::command]
-fn save_settings(state: State<'_, std::sync::Arc<AppState>>, settings: Value) -> Value {
+fn save_settings(window: tauri::Window, state: State<'_, std::sync::Arc<AppState>>, settings: Value) -> Value {
+    // Settings with a window side effect have to be APPLIED here, not merely
+    // stored: the config hard-codes alwaysOnTop, so without this the toggle
+    // writes a value nothing reads and the widget stays pinned forever.
+    if let Some(on_top) = settings.get("alwaysOnTop").and_then(|v| v.as_bool()) {
+        let _ = window.set_always_on_top(on_top);
+    }
     // Changing the Google source invalidates the cached fetch: the user
     // expects the newly chosen surface on the next tick, not in five minutes.
     let previous = state
@@ -120,8 +126,26 @@ fn close_window(window: tauri::Window) {
     let _ = window.close();
 }
 
+/// The renderer distinguishes a background refit from a deliberate one. A
+/// background refit must never collapse a window the user sized by hand;
+/// a preset fit or a direct click (graph toggle, row hide) may. Dropping these
+/// flags — as the first cut of the shim did — let every background refresh
+/// yank a hand-sized window back to content height.
 #[tauri::command]
-fn resize_window(window: tauri::Window, height: f64) {
+fn resize_window(
+    window: tauri::Window,
+    height: f64,
+    force: Option<bool>,
+    fit_preset: Option<bool>,
+    user_action: Option<bool>,
+) {
+    let deliberate = fit_preset.unwrap_or(false) || user_action.unwrap_or(false);
+    if force.unwrap_or(false) && !deliberate && window_is_user_sized(&window) {
+        return;
+    }
+    if !force.unwrap_or(false) && window_is_user_sized(&window) {
+        return;
+    }
     if let Ok(size) = window.inner_size() {
         let scale = window.scale_factor().unwrap_or(1.0);
         let logical_width = size.width as f64 / scale;
@@ -143,6 +167,20 @@ fn resize_window(window: tauri::Window, height: f64) {
 /// The height the backend last set, used to distinguish a programmatic fit
 /// from a hand-resize. Electron tracked the same thing as `_lastSetHeight`.
 static LAST_SET_HEIGHT: std::sync::Mutex<f64> = std::sync::Mutex::new(0.0);
+
+/// True once the live height no longer matches what we last set — i.e. the
+/// user dragged the frame. Zero means we have not sized it yet, so nothing has
+/// been overridden.
+fn window_is_user_sized(window: &tauri::Window) -> bool {
+    let expected = LAST_SET_HEIGHT.lock().map(|h| *h).unwrap_or(0.0);
+    if expected <= 0.0 {
+        return false;
+    }
+    match (window.inner_size(), window.scale_factor()) {
+        (Ok(size), Ok(scale)) => ((size.height as f64 / scale) - expected).abs() > 4.0,
+        _ => false,
+    }
+}
 
 #[tauri::command]
 fn fit_landscape_width(window: tauri::Window, width: f64) {
@@ -217,6 +255,84 @@ fn set_min_height(window: tauri::Window, height: f64) {
     let _ = window.set_min_size(Some(tauri::LogicalSize::new(290.0, height)));
 }
 
+/// Wide / tall window presets. Sizes and the clamp-to-work-area behaviour
+/// mirror the Electron handler; "reset" returns to the auto-sized widget and
+/// clears the tracker so the renderer resumes auto-height.
+#[tauri::command]
+fn apply_window_preset(window: tauri::Window, preset: String) {
+    const WIDGET_WIDTH: f64 = 590.0;
+    const WIDGET_HEIGHT: f64 = 155.0;
+    const WIDE_WIDTH: f64 = 1000.0;
+
+    let (mut width, mut height) = match preset.as_str() {
+        "wide" => (WIDE_WIDTH, 600.0),
+        "tall" => (WIDGET_WIDTH, 1150.0),
+        "reset" => (WIDGET_WIDTH, WIDGET_HEIGHT),
+        _ => return,
+    };
+
+    // Clamp to the monitor's work area so a tall preset cannot run off-screen.
+    if let Ok(Some(monitor)) = window.current_monitor() {
+        let scale = monitor.scale_factor();
+        let size = monitor.size();
+        width = width.min(size.width as f64 / scale);
+        height = height.min(size.height as f64 / scale);
+    }
+    let _ = window.set_size(tauri::LogicalSize::new(width, height));
+    if let Ok(mut slot) = LAST_SET_HEIGHT.lock() {
+        // On reset the tracker matches the window again, so windowIsUserSized
+        // reads false and auto-height resumes; a preset deliberately leaves a
+        // mismatch, which is what makes the renderer's reflow engage.
+        *slot = if preset == "reset" { height } else { 0.0 };
+    }
+}
+
+/// Fire the user's alert webhook. Refuses anything but https, or http to
+/// loopback — an alert must not be a way to send usage data in the clear.
+/// ntfy.sh takes a plain-text body with the title in a header; everything else
+/// gets JSON, same as the Electron build.
+#[tauri::command]
+async fn send_alert_webhook(
+    state: State<'_, std::sync::Arc<AppState>>,
+    event: String,
+    title: String,
+    message: String,
+) -> Result<(), String> {
+    let webhook = state.store.get_or("settings.webhook", json!({}));
+    if !webhook.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false) {
+        return Ok(());
+    }
+    let Some(url) = webhook.get("url").and_then(|v| v.as_str()).filter(|u| !u.is_empty()) else {
+        return Ok(());
+    };
+    let Ok(parsed) = reqwest::Url::parse(url) else { return Ok(()) };
+    let host = parsed.host_str().unwrap_or("");
+    let is_local = host == "localhost" || host == "127.0.0.1";
+    if !(parsed.scheme() == "https" || (parsed.scheme() == "http" && is_local)) {
+        return Ok(());
+    }
+
+    let request = if host.to_lowercase().contains("ntfy") {
+        state
+            .http
+            .post(parsed)
+            .header("Content-Type", "text/plain")
+            .header("Title", title)
+            .header("Tags", "chart_with_upwards_trend")
+            .body(message)
+    } else {
+        state.http.post(parsed).json(&json!({
+            "event": event,
+            "title": title,
+            "message": message,
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "source": "claude-usage-widget",
+        }))
+    };
+    let _ = request.send().await; // best effort: an alert must never block the UI
+    Ok(())
+}
+
 /// Custom alert sounds live outside the bundle. Hand the renderer the bytes as
 /// a data: URL rather than opening the CSP up to arbitrary file: reads — the
 /// same reasoning as the Electron build.
@@ -270,6 +386,18 @@ fn main() {
                     .expect("http client"),
             });
             app.manage(state.clone());
+
+            // Apply the stored window settings once at startup: the config's
+            // alwaysOnTop is only the initial value, and the user's choice
+            // lives in the settings store.
+            if let Some(window) = app.get_webview_window("main") {
+                let on_top = state
+                    .store
+                    .get_or("settings.alwaysOnTop", json!(true))
+                    .as_bool()
+                    .unwrap_or(true);
+                let _ = window.set_always_on_top(on_top);
+            }
 
             // The renderer applies its squeeze/responsive classes only when
             // told the window is user-sized, so without this event the whole
@@ -343,6 +471,8 @@ fn main() {
             set_compact_mode,
             set_min_height,
             read_sound_file,
+            apply_window_preset,
+            send_alert_webhook,
         ])
         .run(tauri::generate_context!())
         .expect("error while running I'm Burning!");
