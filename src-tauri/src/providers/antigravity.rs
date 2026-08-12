@@ -115,8 +115,19 @@ fn oauth_clients() -> Vec<(String, String)> {
     pairs
 }
 
+/// Remembers the one credential pair that actually works. Scanning the binary
+/// yields every id crossed with every secret, and only one combination is
+/// real — without this, each refresh replays the same rejected attempts
+/// against Google's token endpoint.
+static WORKING_CLIENT: std::sync::Mutex<Option<(String, String)>> = std::sync::Mutex::new(None);
+
 async fn refresh_token(client: &reqwest::Client, refresh: &str) -> Option<String> {
-    for (id, secret) in oauth_clients() {
+    let known = WORKING_CLIENT.lock().ok().and_then(|g| g.clone());
+    let mut candidates = oauth_clients();
+    if let Some(known) = &known {
+        candidates.sort_by_key(|c| c != known);
+    }
+    for (id, secret) in candidates {
         let params = [
             ("client_id", id.as_str()),
             ("client_secret", secret.as_str()),
@@ -133,6 +144,9 @@ async fn refresh_token(client: &reqwest::Client, refresh: &str) -> Option<String
         if res.status().is_success() {
             let json: Value = res.json().await.ok()?;
             if let Some(at) = json.get("access_token").and_then(|v| v.as_str()) {
+                if let Ok(mut slot) = WORKING_CLIENT.lock() {
+                    *slot = Some((id, secret));
+                }
                 return Some(at.to_string());
             }
         }
