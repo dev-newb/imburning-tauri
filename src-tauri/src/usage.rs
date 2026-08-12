@@ -116,6 +116,9 @@ pub async fn fetch_all(client: &reqwest::Client, store: &Store, cache: &Cache, f
         data["gemini"] = serde_json::to_value(g).unwrap_or(Value::Null);
     }
 
+    // History records the UNFILTERED document: the visibility toggles are a
+    // display choice and must never change which series get recorded.
+    crate::history::record(&data);
     store.set("latestUsageData", data.clone());
     cache.put("usage", data.clone());
     data

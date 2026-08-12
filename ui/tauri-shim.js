@@ -133,6 +133,23 @@
     oauthDisconnect: later({ success: false })
   };
 
+  // Post-load settle passes. The renderer only re-measures its height when
+  // something changes the content, and Electron's main process happened to
+  // provide the extra nudges (did-finish-load, focus, the resize notifier).
+  // Without them one early measurement — taken before fonts, the chart canvas
+  // and the async usage fetch have settled — is the height the window keeps.
+  // Re-run the renderer's OWN fit a few times as things land, rather than
+  // second-guessing its arithmetic here.
+  const settle = () => {
+    try {
+      if (typeof window.resizeWidget === 'function') window.resizeWidget(false);
+    } catch (err) {
+      console.warn('settle fit failed:', err);
+    }
+  };
+  for (const delay of [1500, 4000, 9000, 15000]) setTimeout(settle, delay);
+  window.addEventListener('focus', () => setTimeout(settle, 120));
+
   // Build verification: WKWebView exposes no remote-debugging port, so the
   // page reports what it rendered back to the backend, which only records it
   // when IMBURNING_DEV_REPORT=1. Silent in a normal run.
@@ -146,7 +163,21 @@
         anthropic: rows('#scopedRows > *'),
         openai: rows('#openaiRows > *'),
         chipGoogle: (document.getElementById('chipGoogle') || {}).textContent || null,
-        errors: window.__shimErrors || []
+        errors: window.__shimErrors || [],
+        layout: (() => {
+          const mc = document.getElementById('mainContent');
+          if (!mc) return 'no mainContent';
+          const top = mc.getBoundingClientRect().top;
+          return {
+            innerHeight: window.innerHeight,
+            mainContentTop: Math.round(top),
+            children: [...mc.children].map((c) => ({
+              id: c.id || c.className,
+              display: getComputedStyle(c).display,
+              bottom: Math.round(c.getBoundingClientRect().bottom - top)
+            }))
+          };
+        })()
       })
     }).catch(() => {});
   }, 12000);

@@ -7,6 +7,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod history;
 mod providers;
 mod store;
 mod usage;
@@ -78,8 +79,8 @@ fn get_credentials(state: State<'_, std::sync::Arc<AppState>>) -> Value {
 }
 
 #[tauri::command]
-fn get_usage_history(state: State<'_, std::sync::Arc<AppState>>) -> Value {
-    state.store.get_or("usageHistory", json!([]))
+fn get_usage_history() -> Value {
+    Value::Array(history::read())
 }
 
 #[tauri::command]
@@ -92,6 +93,10 @@ fn get_app_version(app: tauri::AppHandle) -> String {
 /// IMBURNING_DEV_REPORT=1 is set in the environment.
 #[tauri::command]
 fn dev_report(text: String) {
+    dev_log(&text);
+}
+
+fn dev_log(text: &str) {
     if std::env::var("IMBURNING_DEV_REPORT").as_deref() != Ok("1") {
         return;
     }
@@ -118,10 +123,13 @@ fn close_window(window: tauri::Window) {
 fn resize_window(window: tauri::Window, height: f64) {
     if let Ok(size) = window.inner_size() {
         let scale = window.scale_factor().unwrap_or(1.0);
-        let _ = window.set_size(tauri::LogicalSize::new(
-            size.width as f64 / scale,
-            height.max(180.0),
+        let logical_width = size.width as f64 / scale;
+        let target = height.max(180.0);
+        dev_log(&format!(
+            "resize_window requested={:.0} applied={:.0} width={:.0}",
+            height, target, logical_width
         ));
+        let _ = window.set_size(tauri::LogicalSize::new(logical_width, target));
     }
 }
 
@@ -177,6 +185,7 @@ fn main() {
             // Held as an Arc, not just managed state: the refresh loop below
             // needs to keep it across an await, and a borrowed State<'_, _>
             // is not Send.
+            history::seed_from_electron();
             let state = std::sync::Arc::new(AppState {
                 store: Store::load(),
                 cache: Cache::new(),

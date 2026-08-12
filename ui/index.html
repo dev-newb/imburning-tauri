@@ -11,11 +11,11 @@
         font-src 'self';
         img-src 'self' data:;
         media-src 'self' data:;
-        connect-src 'none';
+        connect-src ipc: http://ipc.localhost;
     ">
     <title>I'm Burning!</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="../../node_modules/chart.js/dist/chart.umd.js"></script>
+    <script src="chart.umd.js"></script>
     <!-- Must precede app.js: it defines the window.electronAPI app.js expects. -->
     <script src="tauri-shim.js"></script>
     <script src="chart-utils.js"></script>
