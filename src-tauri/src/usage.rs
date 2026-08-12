@@ -1,7 +1,7 @@
 // Assembles the single usage document the renderer consumes, mirroring the
 // Electron build's `fetch-usage-data` reply field for field.
 
-use crate::providers::{antigravity, claude_code, codex, gemini, ProviderData};
+use crate::providers::{antigravity, claude_code, codex, gemini, Limit, ProviderData};
 use crate::store::Store;
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};
@@ -58,15 +58,11 @@ async fn google(client: &reqwest::Client, store: &Store) -> Option<ProviderData>
             // because under a Google heading they surprise anyone who has never
             // opened Antigravity. The renderer hides each once, on first sight.
             let foreign = std::mem::take(&mut data.foreign);
-            let mut merged = serde_json::to_value(&data).ok()?;
-            if let Some(limits) = merged.get_mut("limits").and_then(|v| v.as_array_mut()) {
-                for limit in &foreign {
-                    let mut row = serde_json::to_value(limit).ok()?;
-                    row["defaultHidden"] = json!(true);
-                    limits.push(row);
-                }
-            }
-            return serde_json::from_value(merged).ok();
+            data.limits.extend(foreign.into_iter().map(|limit| Limit {
+                default_hidden: true,
+                ..limit
+            }));
+            return Some(data);
         }
         if source == "antigravity" {
             return None; // forced: do not silently fall back

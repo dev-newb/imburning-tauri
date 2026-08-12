@@ -73,7 +73,7 @@ fn reset_iso(window: &Value) -> Option<String> {
 
 fn window_limit(window: &Value, key: String, label: String) -> Option<Limit> {
     let used = window.get("used_percent").and_then(|v| v.as_f64())?;
-    Some(Limit { key, label, percent: used, resets_at: reset_iso(window) })
+    Some(Limit { key, label, percent: used, resets_at: reset_iso(window) , default_hidden: false})
 }
 
 fn normalize(json: &Value) -> Option<ProviderData> {

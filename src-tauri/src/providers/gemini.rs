@@ -221,6 +221,7 @@ pub fn normalize(quota: &Value) -> Option<Vec<Limit>> {
                 label: model_label(model_id),
                 percent: ((1.0 - fraction) * 1000.0).round() / 10.0,
                 resets_at: bucket.get("resetTime").and_then(|v| v.as_str()).map(String::from),
+                default_hidden: false,
             },
         ));
     }

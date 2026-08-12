@@ -15,6 +15,12 @@ pub struct Limit {
     pub percent: f64,
     #[serde(rename = "resetsAt", skip_serializing_if = "Option::is_none")]
     pub resets_at: Option<String>,
+    /// Ships hidden on first sight; the renderer records that once in
+    /// hiddenRowsSeeded and thereafter treats the row as any other.
+    /// Must be a real field: setting it on the serialized JSON and parsing
+    /// back into this struct silently drops it.
+    #[serde(rename = "defaultHidden", default, skip_serializing_if = "std::ops::Not::not")]
+    pub default_hidden: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

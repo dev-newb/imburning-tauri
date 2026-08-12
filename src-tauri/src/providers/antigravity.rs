@@ -255,7 +255,7 @@ fn group(entries: Vec<Entry>, family_label: &str) -> Vec<Limit> {
                     .collect::<Vec<_>>()
                     .join("_")
             );
-            Limit { key, label, percent, resets_at: Some(resets_at) }
+            Limit { key, label, percent, resets_at: Some(resets_at) , default_hidden: false}
         })
         .collect();
     out.sort_by(|a, b| {
