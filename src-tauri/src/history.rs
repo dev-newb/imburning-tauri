@@ -81,14 +81,27 @@ fn worst(limits: Option<&Value>) -> Option<f64> {
         .fold(None, |acc: Option<f64>, p| Some(acc.map_or(p, |a| a.max(p))))
 }
 
+/// The write gate, split out so it can be asserted on directly: whether this
+/// document represents a real reading worth plotting.
+pub fn would_record(data: &Value) -> bool {
+    let codex = worst(data.get("codex").and_then(|c| c.get("limits")));
+    let gemini = worst(data.get("gemini").and_then(|g| g.get("limits")));
+    let has_reset = |field: &str| {
+        data.get(field)
+            .and_then(|v| v.get("resets_at"))
+            .map(|v| !v.is_null())
+            .unwrap_or(false)
+    };
+    has_reset("five_hour") || has_reset("seven_day") || codex.is_some() || gemini.is_some()
+}
+
 pub fn record(data: &Value) {
     let session = data.get("five_hour").and_then(|v| v.get("utilization")).and_then(|v| v.as_f64());
     let weekly = data.get("seven_day").and_then(|v| v.get("utilization")).and_then(|v| v.as_f64());
     let codex = worst(data.get("codex").and_then(|c| c.get("limits")));
     let gemini = worst(data.get("gemini").and_then(|g| g.get("limits")));
 
-    // Nothing worth plotting — a dead session reports no windows and no pools.
-    if session.is_none() && weekly.is_none() && codex.is_none() && gemini.is_none() {
+    if !would_record(data) {
         return;
     }
 

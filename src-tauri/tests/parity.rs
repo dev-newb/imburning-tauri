@@ -5,6 +5,10 @@
 // If these ever disagree the two builds show the user different numbers, which
 // is the one failure mode a shared renderer cannot paper over.
 
+// The test binary is its own crate root, so the modules the code under test
+// refers to as `crate::…` must be declared here too.
+#[path = "../src/store.rs"]
+mod store;
 #[path = "../src/providers/mod.rs"]
 mod providers;
 
@@ -37,4 +41,40 @@ fn diverging_quotas_split_back_into_rows() {
     assert_eq!(out.limits.len(), 2, "a split allowance must draw two bars");
     // Pro sorts first, and carries the diverged figure.
     assert!(out.limits.iter().any(|l| l.percent == 50.0 && l.label.contains("Pro")));
+}
+
+// --- history write gate -----------------------------------------------------
+// Electron refuses to record a sample when the Anthropic windows carry no
+// reset timestamps and no provider reported a figure: that combination means
+// the API returned zeroed data (dead session, removed device), and recording
+// it plots a phantom drop to zero that every forecast then builds on.
+
+#[path = "../src/history.rs"]
+mod history;
+
+#[test]
+fn dead_session_with_no_provider_sample_is_not_recorded() {
+    // utilization present but resets_at absent = the zeroed-data case.
+    let dead = serde_json::json!({
+        "five_hour": { "utilization": 0 },
+        "seven_day": { "utilization": 0 }
+    });
+    assert!(!history::would_record(&dead), "a dead session must not be written");
+}
+
+#[test]
+fn a_provider_sample_alone_is_enough_to_record() {
+    let google_only = serde_json::json!({
+        "five_hour": serde_json::Value::Null,
+        "gemini": { "limits": [{ "key": "m_x", "label": "X", "percent": 12.0 }] }
+    });
+    assert!(history::would_record(&google_only), "Google-only usage is still history");
+}
+
+#[test]
+fn a_live_session_records() {
+    let live = serde_json::json!({
+        "five_hour": { "utilization": 65, "resets_at": "2026-08-12T12:10:00Z" }
+    });
+    assert!(history::would_record(&live));
 }
