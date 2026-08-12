@@ -1,0 +1,3392 @@
+/* Local font â€” Libre Baskerville (bundled, no external dependency) */
+@font-face {
+    font-family: 'Libre Baskerville';
+    font-style: normal;
+    font-weight: 400;
+    src: url('../../assets/fonts/LibreBaskerville-Regular.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'Libre Baskerville';
+    font-style: normal;
+    font-weight: 700;
+    src: url('../../assets/fonts/LibreBaskerville-Bold.ttf') format('truetype');
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Mouse clicks stay outline-free; keyboard focus gets a visible ring */
+*:focus {
+    outline: none;
+}
+
+*:focus-visible {
+    outline: 2px solid rgba(139, 92, 246, 0.85);
+    outline-offset: 1px;
+}
+
+body.theme-light *:focus-visible {
+    outline-color: rgba(109, 62, 216, 0.85);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    overflow: hidden;
+    /* The window is opaque now (needed for Windows Snap) â€” body matches the
+       widget gradient's base so snapped/stretched edges blend in */
+    background: #1e1e2e;
+    -webkit-app-region: no-drag;
+}
+
+html, body { width: 100%; height: 100%; }
+
+body.theme-light { background: #f0f0f8; }
+
+html { background: #1e1e2e; }
+body.theme-light:root, html:has(body.theme-light) { background: #e8e8f0; }
+
+/* When snapped to a half/quarter screen the window is far wider than the
+   widget â€” keep the rows readable by capping and centering the content */
+.content, .compact-content { max-width: 600px; width: 100%; margin: 0 auto; }
+
+#app {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.widget-container {
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Title Bar */
+.title-bar {
+    -webkit-app-region: drag;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 3px 12px;
+    padding-left: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    height: 36px;
+    flex-shrink: 0;
+}
+
+.title {
+    color: #e0e0e0;
+    font-family: 'Libre Baskerville', serif;
+    font-size: 18px;
+    font-weight: 400;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.app-logo {
+    /* The burning robot fills the title bar, tiny perimeter margin only */
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    opacity: 0.95;
+    image-rendering: pixelated;
+}
+
+
+/* Window-caption buttons in the title bar (right corner): wide Â· tall Â· close,
+   Windows-style tight spacing (flush, no gap). */
+.title-caption {
+    -webkit-app-region: no-drag;
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+.caption-btn {
+    width: 36px;
+    height: 26px;
+    border: none;
+    background: transparent;
+    color: #b0b0c0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 5px;
+    font-size: 16px;
+    line-height: 1;
+    transition: background .12s, color .12s;
+}
+.caption-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.caption-btn.active { background: rgba(139, 92, 246, 0.28); color: #b79cff; }
+.caption-minimize:hover { background: rgba(139, 92, 246, 0.20); color: #8b5cf6; }
+.caption-close:hover { background: #e81123; color: #fff; }
+body.theme-light .caption-btn { color: #505070; }
+body.theme-light .caption-btn:hover { background: rgba(0, 0, 0, 0.10); color: #1a1a2e; }
+body.theme-light .caption-close:hover { background: #e81123; color: #fff; }
+
+.control-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: rgba(255, 255, 255, 0.05);
+    color: #a0a0a0;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: all 0.2s ease;
+}
+
+.control-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+.refresh-btn svg {
+    display: block;
+}
+
+
+/* Loading State */
+.loading-container {
+    padding: 60px 20px;
+    text-align: center;
+    color: #a0a0a0;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #8b5cf6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 16px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* No Usage State */
+.no-usage-container {
+    padding: 0 16px;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.no-usage-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    text-align: left;
+    width: 100%;
+}
+
+.no-usage-content svg {
+    color: #8b5cf6;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+}
+
+.no-usage-text-group {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.no-usage-content h3 {
+    color: #e0e0e0;
+    font-size: 14px;
+    margin-bottom: 2px;
+}
+
+.no-usage-content p {
+    color: #a0a0a0;
+    font-size: 11px;
+    margin-bottom: 0;
+}
+
+/* Main Content */
+.content {
+    padding: 16px 20px;
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Expand Toggle */
+.expand-toggle {
+    display: flex;
+    justify-content: center;
+    padding: 2px 0 0;
+    cursor: pointer;
+}
+
+.expand-arrow {
+    color: #505050;
+    transition: all 0.2s ease;
+}
+
+.expand-toggle:hover .expand-arrow {
+    color: #a0a0a0;
+}
+
+.expand-arrow.expanded {
+    transform: rotate(180deg);
+}
+
+/* Expandable Section */
+.expand-section {
+    /* No divider or extra gap inside a provider section â€” the section's own
+       bottom rule is the only separator, spacing matches OpenAI/Google */
+    margin-top: 2px;
+}
+
+.graph-section {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    margin-top: 12px;
+    padding: 14px 16px 8px 12px;
+    height: 220px;
+}
+
+.graph-section canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.graph-btn.active {
+    background: rgba(139, 92, 246, 0.28);
+    color: #8b5cf6;
+    box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.5);
+}
+
+body.theme-light .graph-btn.active {
+    background: rgba(139, 92, 246, 0.15);
+    color: #6d28d9;
+    box-shadow: inset 0 0 0 1px rgba(109, 40, 217, 0.4);
+}
+
+
+.expand-section .usage-section {
+    height: 28px;
+    margin-bottom: 0;
+}
+
+.expand-section .usage-label {
+    font-size: 10px;
+    color: #808080;
+}
+
+.usage-section {
+    display: grid;
+    grid-template-columns: 128px minmax(0, 160px) 36px 72px 68px;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 2px;
+    padding: 0 16px 0 12px;
+    height: 32px;
+}
+
+.usage-headers {
+    display: grid;
+    grid-template-columns: 128px minmax(0, 160px) 36px 72px 68px;
+    align-items: center;
+    gap: 10px;
+    padding: 0 16px 0 12px;
+    margin-bottom: 2px;
+}
+
+.col-header {
+    color: #505060;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+}
+
+.col-header-center {
+    text-align: center;
+}
+
+
+/* Bar + percentage grouped */
+.usage-bar-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.usage-bar-group .progress-bar {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Circle + time grouped */
+
+/* Resets At column */
+.resets-at-text {
+    color: #a0a0b0;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.usage-section:last-of-type {
+    margin-bottom: 0;
+}
+
+/* usage-header was removed */
+
+
+/* We need to re-target the children of usage-header because display:contents strips the wrapper box */
+/* But the HTML structure is: 
+   .usage-section > .usage-header > span, span
+   .usage-section > .progress-bar
+   .usage-section > .timer-container
+*/
+/* Actually, let's just make usage-header NOT display contents, but hide it or remove it in HTML? 
+   Better: make usage-section a Flex Row? 
+   Or keeps Grid: 
+   Column 1: Label
+   Column 2: Progress (flexible)
+   Column 3: Percentage
+   Column 4: Timer
+*/
+
+.usage-label {
+    color: #a0a0a0;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    /* Long model names (Gemini previews) truncate with an ellipsis instead
+       of overrunning into the bars; the full name stays in the tooltip. */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.usage-percentage {
+    color: #e0e0e0;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: right;
+    /* Fixed width so every row's bar ends at the same x regardless of the
+       percent text ("2%" vs "56%" vs empty) */
+    width: 38px;
+    flex-shrink: 0;
+}
+
+.usage-percentage.extra-spending {
+    width: auto; /* currency amounts ($0.00/$20.00) need their room */
+}
+
+/* Progress Bar */
+.progress-bar {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 0;
+    /* Remove margin as it is in grid */
+    min-width: 80px;
+}
+
+/* Anthropic rows wear the clay palette (session = base, weekly darker).
+   Defined ONCE here — the old purple/blue gradients used to sit in this spot
+   and get silently re-skinned 1900 lines later, leaving a stale purple glow
+   under the clay bar. */
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #e59b78 0%, #d97757 100%);
+    border-radius: 3px;
+    transition: width 0.6s ease;
+    position: relative;
+}
+
+.progress-fill.weekly {
+    background: linear-gradient(90deg, #d97757 0%, #b85c3c 100%);
+}
+
+.progress-fill.cc {
+    background: linear-gradient(90deg, #d9a18a 0%, #c8846a 100%);
+}
+
+.progress-fill.extra {
+    background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+
+.progress-fill.fable {
+    background: linear-gradient(90deg, #d946ef 0%, #e879f9 100%);
+    box-shadow: 0 0 10px rgba(217, 70, 239, 0.3);
+}
+
+.progress-fill.codex {
+    background: linear-gradient(90deg, #10a37f 0%, #34d0a8 100%);
+    box-shadow: 0 0 10px rgba(16, 163, 127, 0.3);
+}
+
+.progress-fill.gemini {
+    background: linear-gradient(90deg, #f4b400 0%, #fbd75b 100%);
+    box-shadow: 0 0 10px rgba(244, 180, 0, 0.3);
+}
+
+.progress-fill.opus {
+    background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+}
+
+.progress-fill.sonnet {
+    background: linear-gradient(90deg, #f43f5e 0%, #fb7185 100%);
+    box-shadow: 0 0 10px rgba(244, 63, 94, 0.3);
+}
+
+.progress-fill.cowork {
+    background: linear-gradient(90deg, #06b6d4 0%, #22d3ee 100%);
+    box-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+}
+
+.progress-fill.design {
+    background: linear-gradient(90deg, #92400e 0%, #b45309 100%);
+    box-shadow: 0 0 10px rgba(146, 64, 14, 0.3);
+}
+
+.progress-fill.oauth {
+    background: linear-gradient(90deg, #f97316 0%, #fb923c 100%);
+    box-shadow: 0 0 10px rgba(249, 115, 22, 0.3);
+}
+
+/* Threshold color overrides for warning and danger states */
+.progress-fill.warning {
+    background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+}
+
+.progress-fill.danger {
+    background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+}
+
+
+/* Circle only â€” centered in its column */
+.usage-elapsed-group {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-left: 8px;
+}
+
+/* Timer elements sit inside usage-timer-group flex container */
+.mini-timer {
+    transform: rotate(-90deg);
+    flex-shrink: 0;
+}
+
+.timer-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 4;
+}
+
+.timer-progress {
+    fill: none;
+    stroke: #8b5cf6;
+    stroke-width: 4;
+    transition: stroke-dashoffset 0.6s ease;
+}
+
+.timer-progress.weekly {
+    stroke: #3b82f6;
+}
+
+.timer-progress.extra {
+    stroke: #10b981;
+}
+
+.timer-progress.fable {
+    stroke: #d946ef;
+}
+
+.timer-progress.codex {
+    stroke: #10a37f;
+}
+
+.timer-progress.gemini {
+    stroke: #f4b400;
+}
+
+.timer-progress.opus {
+    stroke: #f59e0b;
+}
+
+.timer-progress.sonnet {
+    stroke: #f43f5e;
+}
+
+.timer-progress.cowork {
+    stroke: #06b6d4;
+}
+
+.timer-progress.design {
+    stroke: #92400e;
+}
+
+.timer-progress.oauth {
+    stroke: #f97316;
+}
+
+.timer-text {
+    color: #e0e0e0;
+    font-size: 12px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    font-family: inherit;
+    text-align: center;
+    white-space: nowrap;
+    /* Fill the grid track rather than pinning 72px. The hard width matched
+       only the widest rung of the size ladder: once landscape/sz3 narrowed
+       this column to 36px the cell kept its 72px, overflowed to the right
+       and sat 18px off the "IN" header it is supposed to sit under. */
+    width: 100%;
+}
+
+.timer-text.extra-spending,
+.usage-percentage.extra-spending {
+    font-size: 10px;
+    color: #10b981;
+    opacity: 0.8;
+}
+
+.timer-text.extra-balance-label {
+    font-size: 12px;
+    color: #a0a0a0;
+    font-weight: 400;
+    text-align: left;
+}
+
+.resets-at-text.extra-balance-amount {
+    font-size: 12px;
+    color: #a0a0a0;
+    font-weight: 400;
+    text-align: center;
+}
+
+.extra-status {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 2px 5px;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+
+.extra-status.on {
+    background: rgba(52, 211, 153, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.4);
+}
+
+.extra-status.off {
+    background: rgba(160, 160, 160, 0.12);
+    color: #808080;
+    border: 1px solid rgba(160, 160, 160, 0.3);
+}
+
+/* Settings Overlay — single definition (was two conflicting blocks whose
+   winner depended on source order; these are the values that actually won) */
+.settings-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, #1a1a2e 0%, #252535 100%);
+    display: flex;
+    flex-direction: column;
+    border-radius: 10px;
+    overflow: hidden;
+    z-index: 10;
+}
+
+.settings-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0;
+}
+
+.settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px 8px 14px;
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    height: 36px;
+    -webkit-app-region: drag;
+}
+
+.settings-title {
+    color: #e0e0e0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.done-settings-btn {
+    -webkit-app-region: no-drag;
+    background: rgba(139, 92, 246, 0.2);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    color: #a78bfa;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.done-settings-btn:hover {
+    background: rgba(139, 92, 246, 0.35);
+    border-color: rgba(139, 92, 246, 0.7);
+    color: #c4b5fd;
+}
+
+
+.settings-rows {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 6px 14px;
+    gap: 10px;
+}
+
+
+/* Two-column toggle row */
+.settings-row-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+
+.tray-color-pair {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.tray-color-pair input[type="color"] {
+    width: 26px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid rgba(128, 128, 128, 0.4);
+    border-radius: 4px;
+    background: none;
+    cursor: pointer;
+}
+
+/* Provider sections (Anthropic / OpenAI / Google) â€” one line-height of
+   breathing room between companies, closed by a faint rule */
+.provider-section {
+    margin-top: 2px;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+body.theme-light .provider-section {
+    border-bottom-color: rgba(60, 60, 100, 0.12);
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 14px 3px 12px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.section-header:hover .section-name {
+    filter: brightness(1.18);
+}
+
+.section-arrow {
+    color: #8a8a9a;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+}
+
+.section-header.collapsed .section-arrow {
+    transform: rotate(-90deg);
+}
+
+.section-name {
+    font-size: 24px;
+    line-height: 1.15;
+    transition: filter 0.15s ease;
+}
+
+/* Anthropic â€” bookish serif in their clay/terracotta, letterpress warmth */
+.brand-anthropic {
+    font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    color: #d97757;
+    text-shadow: 0 0 12px rgba(217, 119, 87, 0.35);
+}
+
+/* OpenAI â€” clean geometric sans with a teal sheen sweeping through */
+.brand-openai {
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    background: linear-gradient(100deg, #10a37f 0%, #7df0cd 45%, #10a37f 90%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: openaiSheen 6s ease-in-out infinite;
+}
+
+@keyframes openaiSheen {
+    0%, 100% { background-position: 0% 0; }
+    50% { background-position: 100% 0; }
+}
+
+/* Google â€” the classic four-colour wordmark, product-sans-ish */
+.brand-google {
+    font-family: 'Product Sans', Futura, 'Century Gothic', 'Segoe UI', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+}
+
+.brand-google .g-b { color: #4285f4; }
+.brand-google .g-r { color: #ea4335; }
+.brand-google .g-y { color: #fbbc05; }
+.brand-google .g-g { color: #34a853; }
+
+/* Eye toggle: open = provider tray icons visible, closed = hidden */
+.section-eye {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #8a8a9a;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.section-eye:hover {
+    background: rgba(139, 92, 246, 0.15);
+    color: #b0b0c4;
+}
+
+.section-eye .eye-open { display: none; }
+.section-eye .eye-closed { display: block; opacity: 0.55; }
+.section-eye.on .eye-open { display: block; }
+.section-eye.on .eye-closed { display: none; }
+.section-eye.on { color: #a78bfa; }
+
+.section-body.collapsed {
+    display: none;
+}
+
+/* Section footer: planner first, account chip on its own line at bottom-right. */
+.section-footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: end;
+    row-gap: 3px;
+    padding-right: 14px;
+}
+
+.section-footer .plan-note {
+    flex: 1;
+    min-width: 0;
+}
+
+.section-footer .section-chip {
+    margin-left: 0;
+    justify-self: end;
+    flex-shrink: 0;
+}
+
+/* Per-section column labels, under each company's logo */
+.section-col-headers {
+    margin-top: 3px;
+    margin-bottom: 2px;
+}
+
+/* Account-status chip beside the brand name */
+.section-chip {
+    margin-left: 0;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 8px;
+    white-space: nowrap;
+    align-self: center;
+}
+
+
+/* Quiet text, no pill — the framed background read as cheap chrome.
+   Informational only: a CLI login is a perfectly good end state, not a
+   prompt to upgrade, so the chip no longer looks or behaves clickable. */
+.section-chip.cli,
+.section-chip.cli:hover,
+.section-chip.anthropic-cli,
+.section-chip.anthropic-cli:hover {
+    color: #9898a8;
+    background: none;
+    border: none;
+    padding: 2px 0;
+    cursor: default;
+}
+
+.settings-connect-btn {
+    background: rgba(139, 92, 246, 0.12);
+    color: #a78bfa;
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.settings-connect-btn:hover {
+    background: rgba(139, 92, 246, 0.22);
+}
+
+/* Connect row for providers with no account yet */
+.connect-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 16px 6px;
+}
+
+.provider-connect-btn {
+    background: rgba(139, 92, 246, 0.12);
+    color: #a78bfa;
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.provider-connect-btn:hover {
+    background: rgba(139, 92, 246, 0.22);
+    border-color: rgba(139, 92, 246, 0.6);
+}
+
+.provider-connect-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.connect-error {
+    font-size: 10px;
+    color: #ef4444;
+}
+
+.disconnect-btn {
+    background: transparent;
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.disconnect-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+body.theme-light .section-arrow {
+    color: #707090;
+}
+
+body.theme-light .brand-anthropic {
+    text-shadow: 0 0 10px rgba(217, 119, 87, 0.25);
+}
+
+body.theme-light .section-eye {
+    color: #707090;
+}
+
+body.theme-light .section-eye.on {
+    color: #7c5ce0;
+}
+
+/* Frozen provider â€” the logo sits encased in a block of real ice:
+   irregular melt-rounded edges, frost patches, a travelling sheen,
+   and jagged icicles hanging off the bottom */
+/* The wrapper the ice is built into. The slab and icicles are real elements
+   inserted by the renderer BEFORE the wordmark, because paint order here is
+   DOM order: icicles, then slab, then letters. They must never use a negative
+   z-index - .widget-container has an opaque background, and a negative-z child
+   paints beneath it, which hides the whole block. */
+.ice-wrap {
+    position: relative;
+    display: inline-block;
+}
+
+/* Frozen provider: the wordmark is frozen INTO a chipped block of ice, with
+   icicles hanging off its underside and the odd bead of meltwater. */
+.section-header.frozen .section-name {
+    position: relative;
+    filter: saturate(0.55) brightness(1.04);
+    -webkit-text-stroke: 0.5px rgba(205, 238, 255, 0.7);
+    text-shadow:
+        0 0 4px rgba(150, 212, 255, 0.6),
+        0 0 10px rgba(100, 170, 235, 0.32),
+        0 -1px 0 rgba(255, 255, 255, 0.55),
+        1px 1.5px 0 rgba(38, 88, 145, 0.4),
+        2px 3px 3px rgba(18, 48, 88, 0.34);
+}
+
+/* Ice ON the glyphs: a duplicate of the wordmark clipped to its own letters. */
+.section-header.frozen .section-name::before {
+    content: attr(data-ice);
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    white-space: nowrap;
+    -webkit-text-stroke: 0;
+    background: linear-gradient(180deg,
+        rgba(206, 238, 255, 0.5) 0%,
+        rgba(150, 206, 250, 0.26) 55%,
+        rgba(216, 244, 255, 0.42) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* The block. Its chipped outline is a clip-path set by the renderer from a
+   fixed seed, so the silhouette is irregular but never reshuffles. The rim
+   gradients give the sides thickness: lit face left, shadowed face right. */
+.ice-slab {
+    position: absolute;
+    inset: -2px -7px -3px -7px;
+    pointer-events: none;
+    border-radius: 14px 10px 7px 5px / 11px 15px 5px 6px;
+    background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.9) 0px, rgba(216, 243, 255, 0.45) 3.5px,
+                        rgba(170, 215, 250, 0.18) 8px, rgba(255, 255, 255, 0) 15px),
+        linear-gradient(270deg, rgba(148, 200, 245, 0.75) 0px, rgba(52, 104, 166, 0.42) 4.5px,
+                        rgba(70, 125, 185, 0.16) 10px, rgba(255, 255, 255, 0) 17px),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0px, rgba(255, 255, 255, 0.16) 4px, transparent 11px),
+        linear-gradient(0deg, rgba(196, 232, 255, 0.5) 0px, rgba(255, 255, 255, 0) 9px),
+        linear-gradient(135deg, rgba(188, 228, 255, 0.30) 0%, rgba(232, 248, 255, 0.14) 42%,
+                        rgba(146, 203, 250, 0.28) 100%);
+    box-shadow:
+        inset 2px 2px 7px rgba(255, 255, 255, 0.5),
+        inset -3px -4px 11px rgba(40, 95, 155, 0.4),
+        inset 0 0 22px rgba(180, 222, 255, 0.2);
+    filter: drop-shadow(2px 3px 3px rgba(16, 42, 78, 0.6));
+}
+
+body.theme-light .ice-slab {
+    filter: drop-shadow(2px 3px 3px rgba(90, 120, 165, 0.42));
+}
+
+/* Icicles hang from the block, not the text, so they run its full width. */
+.icicles {
+    position: absolute;
+    left: -3px;
+    right: -3px;
+    top: calc(100% + 1px);
+    height: 0;
+    pointer-events: none;
+    --ic: 18px;
+}
+
+/* One element per icicle: each gets its own width, length, lean and opacity,
+   and its own left-lit / right-shadowed gradient so it reads as a cone. */
+.ic {
+    position: absolute;
+    top: 0;
+    transform-origin: 50% 0;
+    border-radius: 42% 42% 50% 50% / 9% 9% 97% 97%;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 34%),
+        linear-gradient(90deg,
+            rgba(255, 255, 255, 0.95) 0%, rgba(228, 247, 255, 0.82) 17%,
+            rgba(178, 219, 252, 0.64) 46%, rgba(56, 106, 166, 0.58) 83%,
+            rgba(99, 152, 202, 0.46) 100%);
+    -webkit-mask-image: linear-gradient(180deg, #000 52%, rgba(0, 0, 0, 0.6) 84%, rgba(0, 0, 0, 0.22) 100%);
+    mask-image: linear-gradient(180deg, #000 52%, rgba(0, 0, 0, 0.6) 84%, rgba(0, 0, 0, 0.22) 100%);
+    filter: drop-shadow(1px 1.5px 1.2px rgba(18, 48, 88, 0.5));
+}
+
+/* Meltwater: a bead lets go every few seconds. */
+.ice-drop {
+    position: absolute;
+    top: 100%;
+    width: 4px;
+    height: 6px;
+    border-radius: 0 0 50% 50%;
+    background: linear-gradient(180deg, rgba(226, 246, 255, 0.95), rgba(150, 208, 252, 0.75));
+    pointer-events: none;
+    opacity: 0;
+    animation: iceDrip 4.2s ease-in infinite;
+}
+
+@keyframes iceDrip {
+    0%, 55% { transform: translateY(14px) scaleY(0.7); opacity: 0; }
+    62%     { transform: translateY(16px) scaleY(1); opacity: 1; }
+    100%    { transform: translateY(44px) scaleY(1.5); opacity: 0; }
+}
+
+body.theme-light .section-header.frozen .section-name {
+    -webkit-text-stroke-color: rgba(120, 180, 230, 0.8);
+    text-shadow:
+        0 0 4px rgba(135, 195, 240, 0.65),
+        0 -1px 0 rgba(255, 255, 255, 0.9),
+        1px 1.5px 0 rgba(70, 125, 185, 0.35),
+        2px 3px 3px rgba(90, 140, 190, 0.3);
+}
+
+
+
+
+
+/* The psychic â€” toggles the graph's forecast projection lines */
+.graph-section {
+    position: relative;
+}
+
+.psychic-btn {
+    position: absolute;
+    top: auto;
+    bottom: 6px;
+    right: 10px;
+    z-index: 5;
+    width: 26px;
+    height: 26px;
+    padding: 1px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    opacity: 0.9;
+    transition: opacity 0.15s ease, filter 0.2s ease, background 0.15s ease;
+}
+
+.psychic-btn img {
+    width: 24px;
+    height: 24px;
+    display: block;
+    image-rendering: pixelated;
+}
+
+.psychic-btn:hover {
+    opacity: 1;
+    background: rgba(139, 92, 246, 0.15);
+}
+
+.psychic-btn.on {
+    filter: drop-shadow(0 0 5px rgba(53, 224, 255, 0.55));
+}
+
+/* Ring-reset sparkle â€” a wand-tap of gold when an elapsed circle completes */
+.sparkle-burst {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: visible;
+    z-index: 5;
+}
+
+.sparkle {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    line-height: 1;
+    color: #ffd700;
+    text-shadow: 0 0 5px rgba(255, 215, 0, 0.9), 0 0 10px rgba(255, 240, 150, 0.5);
+    animation: sparkleFly 1.1s ease-out forwards;
+    opacity: 0;
+}
+
+@keyframes sparkleFly {
+    0%   { transform: translate(calc(-50% + var(--sx)), calc(-50% + var(--sy))) scale(0.2) rotate(0deg); opacity: 0; }
+    18%  { transform: translate(calc(-50% + var(--sx)), calc(-50% + var(--sy))) scale(1.15) rotate(45deg); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.25) rotate(180deg); opacity: 0; }
+}
+
+/* Session planner hint under the pinned rows â€” wraps onto extra lines,
+   never ellipsed */
+.plan-note {
+    font-size: 10px;
+    font-style: italic;
+    color: #808080;
+    padding: 2px 16px 3px;
+    line-height: 13px;
+    white-space: normal;
+}
+
+/* Credits / reset-dot rows stretch their bar area through the elapsed
+   column, ending right where the label column begins */
+.usage-section.stretch-bar .usage-bar-group {
+    grid-column: 2 / 4;
+}
+
+/* Codex credits: the balance's message-count estimate, centred in the row */
+.credits-approx {
+    flex: 1;
+    text-align: center;
+    font-size: 10px;
+    font-style: italic;
+    color: #8a8a9a;
+}
+
+.credits-approx.dim {
+    opacity: 0.55;
+}
+
+/* Codex limit-reset dots â€” magic teal orbs, spread edge to edge */
+.reset-dots {
+    flex: 1;
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+    padding: 0 4px;
+}
+
+.reset-dots.single {
+    justify-content: center;
+}
+
+.reset-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #10a37f 0%, #34d0a8 100%);
+    box-shadow: 0 0 4px rgba(16, 163, 127, 0.5);
+    animation: dotGlimmer 7s ease-in-out infinite;
+}
+
+@keyframes dotGlimmer {
+    0%, 86%, 94%, 100% {
+        filter: brightness(1);
+        box-shadow: 0 0 4px rgba(16, 163, 127, 0.5);
+    }
+    90% {
+        filter: brightness(1.8);
+        box-shadow: 0 0 10px rgba(52, 208, 168, 0.95), 0 0 18px rgba(130, 240, 205, 0.5);
+    }
+}
+
+.webhook-url {
+    width: 100%;
+    font-size: 10px;
+}
+
+/* Custom font colour (Settings) â€” overrides the data-text colours of both
+   themes; chrome (buttons, banner, settings) keeps its theme colours */
+body.custom-font .usage-label,
+body.custom-font .expand-section .usage-label,
+body.custom-font .usage-percentage,
+body.custom-font .timer-text,
+body.custom-font .resets-at-text,
+body.custom-font .col-header,
+body.custom-font .compact-label,
+body.custom-font .compact-pct,
+body.custom-font .plan-note,
+body.custom-font .title span,
+body.custom-font .dual-label,
+body.custom-font .dual-pct,
+body.custom-font .dual-special-value,
+body.custom-font .dual-head span,
+body.custom-font .credits-approx {
+    color: var(--custom-font) !important;
+}
+
+.settings-col {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 0 4px;
+}
+
+.settings-col .settings-row-label {
+    width: 90px;
+    flex-shrink: 0;
+}
+
+.settings-col-disabled .settings-row-label {
+    color: #787888;
+}
+
+.settings-row-hint {
+    color: #8f8fa0;
+    font-size: 10px;
+    font-weight: bold;
+    line-height: 1.2;
+}
+
+.settings-row-label {
+    color: #c0c0c0;
+    font-size: 11px;
+}
+
+/* Threshold inputs */
+.threshold-group {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.threshold-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: default;
+}
+
+.threshold-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.warning-dot {
+    background: #f59e0b;
+}
+
+.danger-dot {
+    background: #ef4444;
+}
+
+.threshold-input {
+    width: 38px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #e0e0e0;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 11px;
+    text-align: center;
+    -moz-appearance: textfield;
+}
+
+.threshold-input::-webkit-inner-spin-button,
+.threshold-input::-webkit-outer-spin-button {
+    opacity: 0.4;
+}
+
+.threshold-input:focus {
+    border-color: #8b5cf6;
+    outline: none;
+}
+
+body.theme-light .threshold-input {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.18);
+    color: #1a1a2e;
+}
+
+body.theme-light .threshold-input:focus {
+    border-color: #7c3aed;
+}
+
+.threshold-pct {
+    color: #707080;
+    font-size: 11px;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    width: 34px;
+    height: 18px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.toggle-slider {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255,255,255,0.15);
+    border-radius: 18px;
+    transition: background 0.2s;
+}
+
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 13px;
+    height: 13px;
+    left: 2.5px;
+    top: 2.5px;
+    background: #a0a0a0;
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background: rgba(139, 92, 246, 0.5);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(16px);
+    background: #a78bfa;
+}
+
+.toggle-switch input:disabled + .toggle-slider {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.toggle-switch:has(input:disabled) {
+    cursor: not-allowed;
+}
+
+/* Theme Selector */
+
+
+
+
+/* Settings Footer */
+.settings-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: auto;
+    padding: 10px 14px 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.settings-footer .settings-version-label {
+    flex: 1;
+    font-size: 11px;
+    color: #9090b0;
+}
+
+.settings-footer .github-btn {
+    flex-shrink: 0;
+}
+
+.logout-btn {
+    background: transparent;
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.logout-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.7);
+}
+
+.github-btn {
+    background: rgba(139, 92, 246, 0.12);
+    color: #a78bfa;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+    flex: 1;
+    justify-content: center;
+}
+
+.github-btn svg {
+    display: block;
+    flex-shrink: 0;
+}
+
+.github-btn:hover {
+    background: rgba(139, 92, 246, 0.22);
+    border-color: rgba(139, 92, 246, 0.55);
+}
+
+.settings-btn {
+    font-size: 14px;
+}
+
+
+
+/* Scrollbar (if needed) */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Warning states (bar variants live with the other .progress-fill rules) */
+.timer-progress.warning {
+    stroke: #f59e0b;
+}
+
+.timer-progress.danger {
+    stroke: #ef4444;
+}
+
+/* Light Theme */
+body.theme-light .widget-container {
+    background: linear-gradient(135deg, #f0f0f8 0%, #e8e8f0 100%);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+body.theme-light .title-bar,
+body.theme-light .settings-header {
+    background: rgba(0, 0, 0, 0.06);
+    border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+body.theme-light .title,
+body.theme-light .settings-title {
+    color: #1a1a2e;
+}
+
+body.theme-light .usage-label {
+    color: #606080;
+}
+
+body.theme-light .usage-percentage,
+body.theme-light .timer-text {
+    color: #1a1a2e;
+}
+
+body.theme-light .progress-bar {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+body.theme-light .timer-bg {
+    stroke: rgba(0, 0, 0, 0.1);
+}
+
+/* Light-theme coverage that used to be missing (dark-only artifacts) */
+body.theme-light .toggle-switch input:not(:checked) + .toggle-slider {
+    background: rgba(0, 0, 0, 0.18);
+}
+
+body.theme-light .resets-at-text {
+    color: #4a4a66;
+}
+
+body.theme-light .no-usage-content h3 {
+    color: #1a1a2e;
+}
+
+body.theme-light .loading-container {
+    color: #606080;
+}
+
+body.theme-light .spinner {
+    border-color: rgba(0, 0, 0, 0.08);
+    border-top-color: #8b5cf6;
+}
+
+body.theme-light ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+}
+
+body.theme-light ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.28);
+}
+
+body.theme-light .graph-popout-btn {
+    background: rgba(240, 240, 248, 0.75);
+    color: #505070;
+}
+
+/* Unencrypted-storage warning in Settings */
+.plain-storage-warning {
+    color: #d99a2b;
+}
+
+body.theme-light .control-btn {
+    background: rgba(0, 0, 0, 0.06);
+    color: #505070;
+}
+
+body.theme-light .control-btn:hover {
+    background: rgba(0, 0, 0, 0.12);
+    color: #1a1a2e;
+}
+
+body.theme-light .settings-overlay {
+    background: linear-gradient(135deg, #f0f0f8 0%, #e8e8f0 100%);
+    border-radius: 10px;
+}
+
+body.theme-light .settings-row-label {
+    color: #303050;
+}
+
+body.theme-light .settings-disclaimer {
+    color: #9090a0;
+}
+
+body.theme-light .theme-btn {
+    background: rgba(0,0,0,0.06);
+    border-color: rgba(0,0,0,0.12);
+    color: #606080;
+}
+
+body.theme-light .theme-btn.active {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.4);
+    color: #7c3aed;
+}
+
+
+body.theme-light .expand-arrow {
+    color: #909090;
+}
+
+/* â”€â”€ Update Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.update-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #1a2a00;
+    padding: 4px 10px;
+    gap: 6px;
+    -webkit-app-region: no-drag;
+}
+
+.update-banner-text {
+    font-size: 11px;
+    color: #a8e063;
+    cursor: pointer;
+    flex: 1;
+    text-align: center;
+    font-family: inherit;
+}
+
+.update-banner-text:hover {
+    text-decoration: underline;
+}
+
+.update-banner-dismiss {
+    background: transparent;
+    border: none;
+    color: #a8e063;
+    cursor: pointer;
+    font-size: 11px;
+    padding: 0 2px;
+    line-height: 1;
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+.update-banner-dismiss:hover {
+    opacity: 1;
+}
+
+/* â”€â”€ Stale-session notice (non-destructive degraded-fetch banner) â”€â”€ */
+.stale-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #2a1f00;
+    padding: 4px 10px;
+    gap: 6px;
+    -webkit-app-region: no-drag;
+}
+
+.stale-banner-text {
+    font-size: 11px;
+    color: #f0c674;
+    text-align: center;
+    font-family: inherit;
+}
+
+body.theme-light .stale-banner { background: #fdf3d7; }
+body.theme-light .stale-banner-text { color: #8a6d1a; }
+
+/* â”€â”€ Settings version row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.settings-version-label {
+    font-size: 11px;
+    color: #9090b0;
+    font-family: inherit;
+}
+
+.settings-update-link {
+    font-size: 11px;
+    color: #a8e063;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.settings-update-link:hover {
+    text-decoration: underline;
+}
+
+body.theme-light .update-banner {
+    background: #e8f5c8;
+}
+
+body.theme-light .update-banner-text,
+body.theme-light .update-banner-dismiss {
+    color: #4a7a00;
+}
+
+body.theme-light .settings-version-label {
+    color: #aaaacc;
+}
+
+body.theme-light .settings-update-link {
+    color: #4a7a00;
+}
+
+/* â”€â”€ Settings select dropdowns â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.settings-select {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    color: #e0e0f0;
+    font-size: 11px;
+    padding: 3px 6px;
+    cursor: pointer;
+    outline: none;
+    font-family: inherit;
+}
+
+.settings-select option {
+    background: #2a2a3e;
+    color: #e0e0f0;
+}
+
+.settings-select:hover {
+    border-color: rgba(255,255,255,0.3);
+}
+
+body.theme-light .settings-select {
+    background: rgba(0,0,0,0.05);
+    border-color: rgba(0,0,0,0.15);
+    color: #303050;
+}
+
+body.theme-light .settings-select option {
+    background: #ffffff;
+    color: #303050;
+}
+
+/* â”€â”€ Compact Mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
+/* Reduce title font size in compact mode to prevent wrapping */
+body.compact-mode .title {
+    font-size: 14px;
+}
+
+/* Compact content container */
+.compact-content {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 6px 22px;
+    flex: 1;
+}
+
+/* Compact rows */
+.compact-rows {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    gap: 7px;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.compact-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    flex: 1;
+    min-height: 16px;
+    max-height: 44px;
+}
+
+.compact-row .compact-bar-wrap {
+    height: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.compact-row .compact-bar-bg { height: clamp(10px, 55%, 26px); }
+
+.compact-label {
+    color: #808090;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    width: 50px;
+    flex-shrink: 0;
+}
+
+.compact-bar-wrap {
+    flex: 1;
+    min-width: 0;
+}
+
+.compact-bar-bg {
+    position: relative;
+    /* height comes from .compact-row .compact-bar-bg's clamp() — a fixed
+       height here was unreachable and misleading */
+    width: 100%;
+    background: rgba(255,255,255,0.08);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.compact-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%);
+    border-radius: 4px;
+    transition: width 0.6s ease;
+}
+
+.compact-bar-fill.weekly {
+    background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+}
+
+.compact-bar-fill.fable {
+    background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
+}
+
+.compact-bar-fill.warning {
+    background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);
+}
+
+.compact-bar-fill.danger {
+    background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
+}
+
+.compact-pct {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 9px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 4px rgba(0,0,0,0.6);
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+/* Compact settings overlay body */
+.compact-settings-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 14px;
+}
+
+.compact-settings-body .settings-col {
+    gap: 12px;
+}
+
+/* Light theme compact */
+body.theme-light .compact-label {
+    color: #606080;
+}
+
+body.theme-light .compact-bar-bg {
+    background: rgba(0,0,0,0.08);
+}
+
+body.theme-light .compact-pct {
+    color: rgba(0,0,0,0.75);
+    text-shadow: none;
+}
+
+/* ---- Desktop / CLI subgroups with burnable subheadings ---- */
+
+.subheading-row {
+    display: flex;
+    align-items: center;
+    padding: 3px 16px 0;
+}
+
+.subheading {
+    position: relative;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 1px 16px 1px 0;
+    margin: 0;
+    font-family: inherit;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: #6b6b80;
+    display: inline-flex;
+    line-height: 1.5;
+    opacity: 0.85;
+    transition: opacity 0.15s;
+}
+
+.subheading:hover { opacity: 1; }
+
+body.theme-light .subheading { color: #8a8aa0; }
+
+/* Letters char in place as the fire line passes over them */
+.burning .sub-letter {
+    animation: charLetter 0.3s both;
+    animation-delay: var(--burn-d);
+}
+
+.unburning .sub-letter {
+    animation: healLetter 0.3s both;
+    animation-delay: var(--heal-d);
+}
+
+.burnt .sub-letter {
+    color: var(--char-col, #1e1712);
+    opacity: 0.95;
+    transform: translateY(1px) rotate(var(--rot));
+    text-shadow: var(--char-soot);
+}
+
+@keyframes charLetter {
+    0% { color: inherit; opacity: 1; transform: none; text-shadow: none; }
+    30% {
+        /* ignition pop: the letter flares white-hot and swells for a beat */
+        color: #ffd9a0;
+        opacity: 1;
+        transform: scale(1.06);
+        text-shadow: 0 0 8px rgba(255, 140, 24, 1), 0 0 3px rgba(255, 236, 160, 1);
+    }
+    46% {
+        color: #ffb257;
+        opacity: 1;
+        transform: scale(0.99);
+        text-shadow: 0 0 5px rgba(255, 120, 20, 0.8), 0 0 2px rgba(255, 220, 120, 0.8);
+    }
+    100% {
+        color: var(--char-col, #1e1712);
+        opacity: 0.95;
+        transform: translateY(1px) rotate(var(--rot));
+        text-shadow: var(--char-soot);
+    }
+}
+
+@keyframes healLetter {
+    0% { color: var(--char-col, #1e1712); opacity: 0.95; transform: translateY(1px) rotate(var(--rot)); text-shadow: var(--char-soot); }
+    40% { color: #ffcf87; opacity: 1; transform: translateY(0.5px) scale(1.05); text-shadow: 0 0 7px rgba(255, 170, 60, 0.9); }
+    70% { color: #ffe9c4; text-shadow: 0 0 4px rgba(255, 214, 130, 0.6); }
+    100% { color: inherit; opacity: 1; transform: none; text-shadow: none; }
+}
+
+/* JS-driven pixel fire: the sweep engine in app.js spawns these particles.
+   Flames are chunky 2px-cell sprites (box-shadow art in the robot palette);
+   smoke is blocky grey cells rising in steps. */
+.subheading .fx,
+.usage-section .fx {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: visible;
+    z-index: 5;
+    contain: layout style; /* particle churn never re-lays-out the row */
+}
+
+/* The ember glow that rides the fire front (one node per sweep) */
+@keyframes fxGlowPulse {
+    0%, 100% { opacity: .7; }
+    50% { opacity: 1; }
+}
+.fx .fx-glow {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 210, 120, .9);
+    box-shadow: 0 0 12px 5px rgba(255, 146, 43, .5), 0 0 26px 11px rgba(232, 89, 12, .22);
+    animation: fxGlowPulse 220ms ease-in-out infinite;
+    will-change: transform, opacity;
+}
+
+.fx .fp {
+    position: absolute;
+    pointer-events: none;
+    transform-origin: 50% 100%;
+    will-change: transform, opacity;
+}
+
+@keyframes pxFlame {
+    0% { transform: scale(.5, .3); opacity: 0; }
+    10% { opacity: 1; transform: scale(1, 1); }
+    30% { transform: scale(1.06, .92) translateY(-0.5px); }
+    45% { transform: scale(.88, .9); }
+    62% { transform: scale(1.04, 1.12) translateY(-1px); }
+    80% { transform: scale(.95, .8); }
+    100% { transform: scale(.5, .35) translateY(-4px); opacity: 0; }
+}
+
+@keyframes pxSmoke {
+    0% { transform: translate(0, 0); opacity: 0; }
+    20% { opacity: .55; }
+    100% { transform: translate(var(--dx), var(--ry)) scale(1.5); opacity: 0; }
+}
+
+/* Style 2 fire-motes: born at the fill, rising fast, guttering out */
+@keyframes fireRise {
+    0% { transform: translate(0, 0) scale(1); opacity: 0; }
+    12% { opacity: 1; }
+    100% { transform: translate(var(--dx, 0px), var(--ry, -14px)) scale(0.4); opacity: 0; }
+}
+
+/* Ash flakes drifting down off freshly charred text */
+@keyframes ashFall {
+    0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+    12% { opacity: .85; }
+    100% { transform: translate(var(--ax, 6px), var(--ay, 26px)) rotate(var(--ar, 120deg)); opacity: 0; }
+}
+
+/* One-pass golden sheen crossing a restored row beneath its sparkles */
+@keyframes sheenSweep {
+    0% { transform: translateX(-120%); opacity: 0; }
+    15% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { transform: translateX(320%); opacity: 0; }
+}
+.row-sheen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 45%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 4;
+    background: linear-gradient(100deg, transparent 8%, rgba(255, 224, 130, .16) 45%, rgba(255, 240, 190, .28) 52%, rgba(255, 224, 130, .16) 60%, transparent 92%);
+    animation: sheenSweep .8s ease-out forwards;
+}
+
+/* Roll-up/down of the subgroup body â€” fr-unit grid transition, no JS measuring.
+   Hiding waits 0.3s so the fire clearly leads; revealing starts immediately
+   while the letters heal. */
+.subgroup-roll {
+    display: grid;
+    grid-template-rows: 1fr;
+    /* gentle decelerating open */
+    transition: grid-template-rows 0.5s cubic-bezier(0.22, 0.9, 0.32, 1);
+}
+
+.subgroup.hidden-group .subgroup-roll {
+    grid-template-rows: 0fr;
+    /* closing accelerates in, like the floor giving way under the ash */
+    transition: grid-template-rows 0.5s cubic-bezier(0.55, 0.06, 0.68, 0.19) 0.28s;
+}
+
+.subgroup-inner { min-height: 0; }
+
+/* Clip only while animating or hidden â€” sparkles and glows fly free otherwise */
+.subgroup.hidden-group .subgroup-inner,
+.subgroup.rolling .subgroup-inner { overflow: hidden; }
+
+.subgroup.no-anim .subgroup-roll { transition: none !important; }
+.subgroup.no-anim .sub-letter { animation: none !important; }
+
+/* ---- Settings credit row (original author + coffee) ---- */
+
+.settings-credit {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 14px 10px;
+    font-size: 10px;
+    color: #707090;
+}
+
+.credit-link {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font-family: inherit;
+    font-size: 10px;
+    color: #9090b0;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.credit-link:hover { color: #b0b0d0; }
+
+.coffee-btn {
+    background: rgba(255, 221, 0, 0.12);
+    color: #e6c619;
+    border: 1px solid rgba(255, 221, 0, 0.35);
+    padding: 4px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+    transition: all 0.2s;
+}
+
+.coffee-btn:hover {
+    background: rgba(255, 221, 0, 0.22);
+    border-color: rgba(255, 221, 0, 0.6);
+}
+
+body.theme-light .settings-credit { color: #8080a0; }
+body.theme-light .credit-link { color: #606080; }
+body.theme-light .coffee-btn { background: rgba(200, 160, 0, 0.1); color: #8a6d00; border-color: rgba(200, 160, 0, 0.4); }
+
+/* ---- Settings: per-company columns (logins pinned to the bottom) ---- */
+
+.settings-providers {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.provider-col {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 8px 9px;
+    min-height: 190px;
+}
+
+.provider-col-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.pct-anthropic { color: #d97757; }
+.pct-openai { color: #2dd4bf; }
+.pct-google { color: #f4b400; }
+
+.provider-col-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.provider-col-body .settings-row-label {
+    margin-top: 4px;
+}
+
+.provider-col-login {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.provider-col-login .settings-row-hint {
+    font-size: 9px;
+    word-break: break-all;
+    line-height: 1.3;
+}
+
+.provider-col-login .settings-connect-btn,
+.provider-col-login .disconnect-btn,
+.provider-col-login .logout-btn {
+    width: 100%;
+    padding: 4px 6px;
+    font-size: 10px;
+}
+
+body.theme-light .provider-col {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+body.theme-light .provider-col-title { border-bottom-color: rgba(0, 0, 0, 0.08); }
+body.theme-light .provider-col-login { border-top-color: rgba(0, 0, 0, 0.07); }
+
+/* =================== Responsive squeeze ladders =================== */
+/* The window's natural width is 560px, so these only engage when the user
+   snaps or hand-resizes narrower. Ladder: bars go first, then column
+   headings, then row labels (last text), then Resets-In becomes a ring,
+   then Resets-At (redundant with Resets-In) disappears entirely. */
+
+/* Band classes are computed by applySqueezeClasses from the EFFECTIVE width
+   (window width, or window/3 in landscape's three-column layout) */
+body.sz1 .usage-section, body.sz1 .usage-headers { grid-template-columns: minmax(0, 1fr) 44px 36px 72px 68px; }
+body.sz1 .progress-bar { display: none; }
+body.sz1 .usage-bar-group { justify-content: flex-end; }
+/* Landscape re-shows headers per column; make the exclusivity explicit here
+   instead of relying on source order between equal-specificity !importants */
+body.sz1:not(.landscape) .usage-headers { display: none !important; }
+
+/* Mid band: labels keep their names but windows abbreviate â€” (daily)->(1D),
+   with the meaning in a tooltip (set by applyLabelMode, abbreviated only) */
+body.lbl-abbr .usage-label, body.lbl-abbr .expand-section .usage-label { font-size: 0; }
+body.lbl-abbr .usage-label > * { display: none; }
+body.sz1 .extra-balance-label, body.sz1 .extra-balance-amount { display: none; }
+body.lbl-abbr .usage-label::after {
+    content: attr(data-abbr);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: inherit;
+}
+
+/* Row labels compress to short colour-matched codes (full name in tooltip) */
+/* font-size:0 hides the full label, but letter-spacing is NOT scaled by it:
+   the invisible text kept 0.5px per character and shoved the ::after code
+   right by a length-dependent amount — "Claude Session (5h)" (19 chars)
+   pushed 9.5px, "Fable (7d)" (10) only 5px, so codes in the same column
+   started at different x. It also stole room, clipping CLA 5H to "CLA 5".
+   Zeroing it here costs nothing: the ::after sets its own tracking. */
+body.lbl-code .usage-label, body.lbl-code .expand-section .usage-label { font-size: 0; letter-spacing: 0; word-spacing: 0; }
+body.lbl-code .usage-label > * { display: none; }
+body.lbl-code .usage-label::after {
+    content: attr(data-code);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--row-col, #8b8fa3);
+}
+body.lbl-code .credits-approx { display: none; }
+body.lbl-code .extra-balance-label, body.lbl-code .extra-balance-amount { display: none; }
+body.lbl-code .usage-section { grid-template-columns: 46px 44px 36px 72px 68px; justify-content: start; gap: clamp(4px, 2.4vw, 10px); }
+body.lbl-code .usage-bar-group { justify-content: flex-end; }
+
+body.sz3 .usage-section { grid-template-columns: 46px 44px 36px 36px 68px; justify-content: start; gap: clamp(3px, 2vw, 8px); }
+/* Resets-In text becomes a remaining-time ring (same family as Elapsed) */
+body.sz3 .timer-text:not(.extra-balance-label) {
+    font-size: 0 !important;
+    display: flex;
+    justify-content: center;
+}
+body.sz3 .timer-text:not(.extra-balance-label)::before {
+    content: '';
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: conic-gradient(var(--rem-col, #8b8fa3) var(--rem-deg, 0deg), rgba(128, 128, 140, 0.15) 0);
+}
+
+body.sz4 .usage-section { grid-template-columns: 46px 44px 36px 36px; justify-content: start; gap: clamp(3px, 1.8vw, 7px); }
+body.sz4 .resets-at-text { display: none; }
+
+/* Settings adapts too: provider columns stack, panel scrolls when cramped */
+.settings-content { overflow-y: auto; }
+
+@media (max-width: 520px) {
+    .settings-providers { grid-template-columns: 1fr; }
+    .settings-row-2col, .settings-row-2col.tray-colors-row { grid-template-columns: 1fr; }
+}
+
+/* Vertical squeeze â€” classes set by the renderer ONLY while the user has
+   hand-sized the window (never during auto-height, so no shrink spiral):
+   vh-1 drops planners/headings and tightens rows, vh-2 drops the expandable
+   extras and footers, vh-3 drops the graph and shrinks the wordmarks. */
+body.vh-1 .plan-note { display: none !important; }
+body.vh-1:not(.landscape) .usage-headers { display: none !important; }
+body.vh-1 .usage-section { height: 26px; margin-bottom: 0; }
+body.vh-1 .provider-section { margin-bottom: 4px; }
+body.vh-1 .section-footer { padding-top: 0; padding-bottom: 2px; }
+body.vh-1 .content { overflow-y: auto; }
+
+body.vh-2:not(.landscape) .expand-section { display: none !important; }
+body.vh-2 .expand-toggle { display: none !important; }
+body.vh-2 .section-footer { display: none !important; }
+body.vh-2 .subheading-row { padding-top: 0; }
+
+body.vh-3 .graph-section { display: none !important; }
+body.vh-3 .section-header { padding-top: 1px; padding-bottom: 0; }
+body.vh-3 .section-name { font-size: 15px; }
+
+/* =================== Tall mode =================== */
+/* When the user stretches the window taller than the widget needs, fill the
+   space instead of leaving a void: sections spread out evenly, text scales
+   up, and the company wordmarks grow progressively with height. Driven by
+   --tall (0..1), set by the renderer ONLY while the window is user-sized â€”
+   same anti-spiral gating as the squeeze classes. */
+
+body.tall .content {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    overflow-y: auto;
+    flex: 1;
+}
+
+body.tall.graph-off .content {
+    justify-content: flex-start;
+    flex: 0 1 auto;
+}
+
+body.tall .usage-percentage { width: auto; min-width: 38px; }
+body.tall .progress-bar { min-width: 56px; }
+
+@media (min-width: 541px) {
+    body.tall .section-name { font-size: min(calc(24px + var(--tall, 0) * 56px), 17vw); }
+    body.tall .section-header { padding-top: calc(4px + var(--tall, 0) * 10px); padding-bottom: calc(2px + var(--tall, 0) * 8px); }
+    body.tall .provider-section { margin-bottom: calc(12px + var(--tall, 0) * 30px); }
+
+    body.tall .usage-label { font-size: calc(11px + var(--tall, 0) * 4px); }
+    body.tall .usage-percentage { font-size: calc(12px + var(--tall, 0) * 5px); }
+    body.tall .timer-text:not(.extra-balance-label) { font-size: calc(11px + var(--tall, 0) * 4px); }
+    body.tall .extra-balance-label, body.tall .extra-balance-amount { font-size: calc(11px + var(--tall, 0) * 3px); }
+    body.tall .resets-at-text { font-size: calc(10px + var(--tall, 0) * 4px); }
+    body.tall .col-header { font-size: calc(9px + var(--tall, 0) * 1.5px); }
+    body.tall .plan-note { font-size: calc(10px + var(--tall, 0) * 3px); }
+    body.tall .subheading { font-size: calc(9px + var(--tall, 0) * 3px); }
+    body.tall .usage-section { height: calc(32px + var(--tall, 0) * 18px); margin-bottom: calc(2px + var(--tall, 0) * 6px); }
+    body.tall .progress-bar { height: calc(7px + var(--tall, 0) * 5px); }
+    body.tall .usage-elapsed-group svg.mini-timer {
+        width: calc(24px + var(--tall, 0) * 12px);
+        height: calc(24px + var(--tall, 0) * 12px);
+    }
+}
+
+/* Wider columns for the bigger type â€” but never while the narrow ladder is
+   active (it owns the grid below 540px) */
+@media (min-width: 541px) {
+    body.tall .usage-section,
+    body.tall .usage-headers {
+        grid-template-columns: calc(128px + var(--tall, 0) * 28px) minmax(0, 1fr) calc(36px + var(--tall, 0) * 10px) calc(72px + var(--tall, 0) * 12px) calc(68px + var(--tall, 0) * 10px);
+    }
+}
+
+
+/* ---- Compact mode: every pool, grouped by company edge colour ---- */
+.compact-row {
+    border-left: 3px solid var(--co, transparent);
+    padding-left: 6px;
+}
+
+.compact-row .compact-label {
+    width: 40px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+
+/* ---- Title-bar sprite buttons (press + clown) ---- */
+.sprite-btn img {
+    width: 18px;
+    height: 18px;
+    image-rendering: pixelated;
+    display: block;
+}
+
+/* ---- No-pizazz mode: the clown is in jail, the party is over ---- */
+body.no-pizazz *,
+body.no-pizazz *::before,
+body.no-pizazz *::after {
+    animation: none !important;
+    transition: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+}
+
+/* Status indicators are information, not pizazz — the loading and refresh
+   spinners keep turning even while the clown is jailed */
+body.no-pizazz .spinner {
+    animation: spin 1s linear infinite !important;
+}
+
+body.no-pizazz .refresh-btn.spinning svg,
+body.no-pizazz .local-login-refresh-btn.spinning svg {
+    animation: spin-refresh 1s linear infinite !important;
+}
+
+/* The iced-over logos thaw to plain text while the clown is jailed */
+body.no-pizazz .section-header.frozen .section-name {
+    -webkit-text-stroke: 0 !important;
+    text-shadow: none !important;
+    filter: saturate(0.3) !important;
+}
+
+/* Clown in jail: the ice comes off entirely rather than sitting there frozen
+   mid-drip. Deliberately NOT background:none - .brand-openai IS a clipped
+   gradient over color:transparent, and killing it blanks the wordmark. */
+body.no-pizazz .section-header.frozen .section-name::before,
+body.no-pizazz .ice-slab,
+body.no-pizazz .icicles,
+body.no-pizazz .ice-drop {
+    display: none !important;
+}
+
+/* ---- Landscape: three company columns side by side ---- */
+body.landscape:not(.compact-mode) .content {
+    max-width: none;
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: auto minmax(190px, 1fr);
+    gap: 4px 14px;
+    align-items: start;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0 10px;
+}
+
+body.landscape.graph-off:not(.compact-mode) .content {
+    grid-template-rows: auto;
+    /* Grow to fill the window like the graph-on layout does, rather than
+       shrink to content. And pin the single row to its natural height at the
+       top (align-content:start) so the box keeps genuine slack over its
+       content — otherwise the row stretches to fill and a descendant sub-pixel
+       lights a phantom ~2px scrollbar while real empty space sits below. */
+    flex: 1 1 auto;
+    align-content: start;
+}
+
+body.landscape .graph-section {
+    grid-column: 1 / -1;
+    min-width: 0;
+    min-height: 190px;
+    height: auto;
+    margin-top: 0;
+    align-self: stretch;
+}
+body.landscape .provider-section { margin-bottom: 4px; }
+
+/* Each column keeps its own header row, in short form... */
+body.landscape .usage-headers { display: grid !important; }
+body.landscape .col-header { font-size: 0; }
+body.landscape .col-header::after {
+    content: attr(data-short);
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+}
+
+/* ...unless the window is also very short â€” then they all go */
+body.landscape.vh-short .usage-headers { display: none !important; }
+
+body.lbl-code .usage-headers { grid-template-columns: 46px 44px 36px 72px 68px; justify-content: start; gap: clamp(4px, 2.4vw, 10px); }
+body.sz3 .usage-headers { grid-template-columns: 46px 44px 36px 36px 68px; justify-content: start; gap: clamp(3px, 2vw, 8px); }
+body.sz4 .usage-headers { grid-template-columns: 46px 44px 36px 36px; justify-content: start; gap: clamp(3px, 1.8vw, 7px); }
+
+/* ---- The CLI subheading IS the second-account pill now ---- */
+/* Quiet amber text, no pill box (the framed background read as cheap chrome) */
+.subheading.cli-pill {
+    background: none;
+    border: none;
+    padding: 2px 4px;
+    color: #d97706;
+    font-size: 8px;
+    letter-spacing: 1.2px;
+}
+
+body.theme-light .subheading.cli-pill {
+    background: none;
+    color: #b45309;
+}
+
+
+/* Compressed bands sit close to the window border */
+body.lbl-code .usage-section, body.lbl-code .usage-headers { padding-right: 6px; }
+body.sz4 .usage-section, body.sz4 .usage-headers { padding-right: 4px; }
+
+/* The clown lives in the content's top-right corner now */
+.content { position: relative; }
+
+/* In compressed bands the stretch rows (credits / reset orbs) span the whole
+   remaining row width, so the orbs centre across the window instead of
+   huddling inside the narrow fixed columns */
+body.sz1 .usage-section.stretch-bar,
+body.lbl-code .usage-section.stretch-bar,
+body.sz3 .usage-section.stretch-bar,
+body.sz4 .usage-section.stretch-bar {
+    grid-template-columns: minmax(46px, auto) 1fr;
+}
+
+body.sz1 .usage-section.stretch-bar .usage-bar-group,
+body.lbl-code .usage-section.stretch-bar .usage-bar-group,
+body.sz3 .usage-section.stretch-bar .usage-bar-group,
+body.sz4 .usage-section.stretch-bar .usage-bar-group {
+    grid-column: 2 / -1;
+}
+
+
+/* ---- Hide individual trackers (hover a row for the minus) ---- */
+.row-hide-btn {
+    position: absolute;
+    right: 1px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    line-height: 12px;
+    border-radius: 50%;
+    border: 1px solid rgba(128, 128, 150, 0.4);
+    background: rgba(128, 128, 150, 0.12);
+    color: #8b8fa3;
+    font-size: 11px;
+    padding: 0;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 5;
+}
+
+.usage-section { position: relative; }
+.usage-section:hover .row-hide-btn { opacity: 1; }
+.row-hide-btn:hover { color: #ef4444; border-color: rgba(239, 68, 68, 0.6); }
+
+.hidden-rows-chip {
+    background: none;
+    border: 1px dashed rgba(128, 128, 150, 0.4);
+    border-radius: 9px;
+    padding: 1px 8px;
+    font-size: 8px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #8b8fa3;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.hidden-rows-chip:hover { color: #b0b0c8; border-color: rgba(128, 128, 150, 0.7); }
+
+/* Row hide/show choreography: incinerate a row to nothing, sparkle it back.
+   The fire layer (.fx) stays lit while the row's own content chars to ash. */
+.usage-section.row-burning > *:not(.fx) { opacity: 0; transition: opacity 0.5s ease; }
+/* A row being restored starts fully collapsed so the window measures small,
+   then revealMarkedRows() animates it open. */
+.usage-section.reveal-init {
+    height: 0 !important;
+    min-height: 0;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    opacity: 0;
+    overflow: hidden;
+}
+
+/* Pop-out control on the inline graph â€” detaches it into its own window. */
+.graph-popout-btn {
+    position: absolute;
+    top: 6px;
+    left: auto;
+    right: 8px;
+    z-index: 6;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid rgba(140, 140, 170, 0.3);
+    background: rgba(30, 30, 42, 0.6);
+    color: #9a9ab8;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+.graph-section:hover .graph-popout-btn { opacity: 1; }
+.graph-popout-btn:hover, .graph-popout-btn.active { opacity: 1; color: #35e0ff; border-color: rgba(53, 224, 255, 0.5); }
+
+
+/* ---- Toolbar strip (directly under the title bar, never hidden) ---- */
+.bottom-bar {
+    position: relative;
+    -webkit-app-region: no-drag;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 3px 10px;
+    height: 34px;
+    flex-shrink: 0;
+    background: rgba(0, 0, 0, 0.18);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.toolbar-spacer {
+    width: 22px;
+    flex: 0 0 22px;
+}
+
+.local-login-refresh-btn.refresh-success {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.14);
+}
+
+.local-login-refresh-btn.refresh-error {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.14);
+}
+
+.bottom-bar .sprite-btn img {
+    width: 22px;
+    height: 22px;
+    image-rendering: pixelated;
+    display: block;
+}
+
+body.theme-light .bottom-bar {
+    background: rgba(0, 0, 0, 0.05);
+    border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+/* One margin line for every shortname: rows, subheadings and pills all
+   start at the same left edge in compressed bands */
+body.sz1 .usage-section,
+body.sz1 .usage-headers,
+body.sz1 .subheading-row {
+    padding-left: 12px;
+}
+
+/* ---- Landscape: columns share one bottom line, CLI gets a mini strip ---- */
+body.landscape:not(.compact-mode) .content { align-items: stretch; }
+
+body.landscape .provider-section {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-width: 0;
+}
+
+body.landscape .provider-section .section-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+body.landscape .dual-row,
+body.landscape .dual-head {
+    grid-template-columns: minmax(42px, 46px) minmax(0, 1fr) 10px minmax(0, 1fr);
+    padding-left: 12px;
+    padding-right: 4px;
+}
+
+/* One row rhythm across all three columns: the dual table's rows match the
+   regular provider rows' 34px pitch (they were 27px, so each Google row
+   drifted 7px further out of line), and its second header sheds the 3px
+   start offset so row one shares the same baseline. */
+body.landscape .dual-row {
+    height: 34px;
+}
+
+body.landscape .dual-table .dual-head:nth-child(2) {
+    height: 17px;
+}
+
+body.landscape .dual-table.hide-cli .dual-row,
+body.landscape .dual-table.hide-cli .dual-head {
+    grid-template-columns: minmax(42px, 46px) minmax(0, 1fr);
+}
+
+body.landscape .section-footer { margin-top: auto; }
+
+/* Wide mode: the planner text starts at the SAME height in every column,
+   whether or not a column shows a "via CLI login" / "N hidden" chip. The
+   footer reserves a fixed band and top-anchors the planner; the chip floats
+   to the bottom-right instead of pushing the planner up a line. */
+body.landscape .section-footer {
+    position: relative;
+    align-content: start;
+    min-height: 60px;
+}
+body.landscape .section-footer .section-chip,
+body.landscape .section-footer .hidden-rows-chip {
+    position: absolute;
+    right: 14px;
+    bottom: 0;
+    margin: 0;
+}
+
+/* CLI second account as a mini strip at the top of the column: abbreviated
+   pill + label-less rows (percent, ring, pie only) */
+body.landscape.dual-compact .section-body > .connect-row,
+body.landscape.dual-compact .section-body > .usage-headers { order: -3; }
+body.landscape.dual-compact .section-body > .subgroup[id$='Cli'] { order: -1; }
+
+body.landscape.dual-compact .subheading.cli-pill .sub-letter { display: none; }
+
+body.landscape.dual-compact .subheading.cli-pill::after {
+    content: 'CLI: 2ND ACCT';
+    font-size: 8px;
+    letter-spacing: 1px;
+}
+
+body.landscape.dual-compact #sgAnthropicCli .usage-section,
+body.landscape.dual-compact #sgOpenaiCli .usage-section,
+body.landscape.dual-compact #sgGoogleCli .usage-section {
+    grid-template-columns: 44px 36px 36px;
+    height: 24px;
+}
+
+body.landscape.dual-compact #sgAnthropicCli .usage-label,
+body.landscape.dual-compact #sgOpenaiCli .usage-label,
+body.landscape.dual-compact #sgGoogleCli .usage-label,
+body.landscape.dual-compact #sgAnthropicCli .resets-at-text,
+body.landscape.dual-compact #sgOpenaiCli .resets-at-text,
+body.landscape.dual-compact #sgGoogleCli .resets-at-text {
+    display: none !important;
+}
+
+/* CLI mini rows always use the pie form for Resets-In */
+body.landscape.dual-compact #sgAnthropicCli .timer-text:not(.extra-balance-label),
+body.landscape.dual-compact #sgOpenaiCli .timer-text:not(.extra-balance-label),
+body.landscape.dual-compact #sgGoogleCli .timer-text:not(.extra-balance-label) {
+    font-size: 0 !important;
+    display: flex;
+    justify-content: center;
+}
+
+body.landscape.dual-compact #sgAnthropicCli .timer-text:not(.extra-balance-label)::before,
+body.landscape.dual-compact #sgOpenaiCli .timer-text:not(.extra-balance-label)::before,
+body.landscape.dual-compact #sgGoogleCli .timer-text:not(.extra-balance-label)::before {
+    content: '';
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: conic-gradient(var(--rem-col, #8b8fa3) var(--rem-deg, 0deg), rgba(128, 128, 140, 0.15) 0);
+}
+
+
+/* ---- Landscape dual tables: shared labels, CLI cluster left of Desktop ---- */
+.dual-table { display: none; }
+
+body.landscape.dual-compact .section-body.has-dual .dual-table { display: block; }
+body.landscape.dual-compact .section-body.has-dual > .usage-headers,
+body.landscape.dual-compact .section-body.has-dual > .subgroup { display: none !important; }
+
+/* In a short rectangle the ordinary providers drop their column headers.
+   Keep Google's account labels, but remove its redundant second header row
+   and shrink the first so all providers' first usage row shares one baseline. */
+body.landscape.vh-short.dual-compact .dual-table > .dual-head:first-child {
+    height: 12px;
+}
+
+body.landscape.vh-short.dual-compact .dual-table > .dual-head:nth-child(2) {
+    display: none;
+}
+
+body.landscape.vh-short.dual-compact .dual-pill {
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: 10px;
+}
+
+.dual-row, .dual-head {
+    display: grid;
+    grid-template-columns: 46px 110px 14px 110px;
+    align-items: center;
+    padding: 0 16px 0 12px;
+    height: 27px;
+}
+
+.dual-head { height: 20px; }
+
+/* Collapsing the second account hides ONLY the CLI columns — the Desktop
+   trio and its label stay. (Listing .dual-row here hid the whole row, wiping
+   the Desktop account too.) */
+.dual-table.hide-cli .dual-pair.cli,
+.dual-table.hide-cli .dual-gap,
+.dual-table.hide-cli .dual-group-head.cli-head { display: none; }
+
+/* The charred pill survives the burn, parked beside the Desktop heading */
+.dual-table.hide-cli .dual-head { grid-template-columns: 46px 110px auto; }
+
+/* The base .dual-table.hide-cli rules above are (0,3,0) — STRONGER than the
+   landscape band grids at (0,2,1) — so landscape needs its own explicit
+   hide-cli template to restore the 24px restore-button column. */
+body.landscape .dual-table.hide-cli .dual-row,
+body.landscape .dual-table.hide-cli .dual-head {
+    grid-template-columns: minmax(42px, 46px) minmax(0, 1fr) 24px;
+}
+
+/* A burnt CLI heading becomes a tiny terminal prompt instead of leaving its
+   full charred title squeezed over the Desktop heading. */
+.dual-table.hide-cli .dual-pill {
+    width: 22px;
+    min-width: 22px;
+    height: 16px;
+    padding: 0;
+    border-radius: 3px;
+    /* Full border here — the base .dual-pill is now border:none (no box), so
+       the collapsed >_ terminal button must declare its own frame. */
+    border: 1px solid rgba(45, 212, 191, 0.55);
+    background: rgba(45, 212, 191, 0.10);
+    color: #2dd4bf;
+    font-family: Consolas, 'Courier New', monospace;
+    letter-spacing: 0;
+    line-height: 14px;
+}
+
+.dual-table.hide-cli .dual-pill .sub-letter { display: none; }
+.dual-table.hide-cli .dual-pill::after {
+    content: '>_';
+    font-size: 9px;
+    font-weight: 700;
+}
+
+body.theme-light .dual-table.hide-cli .dual-pill {
+    border: 1px solid rgba(8, 127, 107, 0.55);
+    background: rgba(8, 127, 107, 0.08);
+    color: #087f6b;
+}
+
+.dual-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.dual-pair {
+    display: grid;
+    grid-template-columns: 40px 34px 34px;
+    align-items: center;
+    justify-items: center;
+}
+
+.dual-pair.special {
+    grid-template-columns: 1fr;
+}
+
+.dual-special-value {
+    font-size: 11px;
+    font-weight: 700;
+    color: #2dd4bf;
+}
+
+body.theme-light .dual-special-value { color: #087f6b; }
+
+.dual-pair .dual-pct { font-size: 11px; font-weight: 700; color: #d0d0e0; }
+body.theme-light .dual-pair .dual-pct { color: #1a1a2e; }
+
+.dual-head span {
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: #505060;
+}
+
+.dual-head .dual-group-head {
+    display: grid;
+    grid-template-columns: 40px 34px 34px;
+    justify-items: center;
+}
+
+/* Expanded "CLI: 2ND ACCT" label: plain amber text, no pill box. (The
+   collapsed >_ terminal button below keeps its own frame — that's a
+   deliberate affordance, not chrome.) */
+.dual-pill {
+    background: none;
+    border: none;
+    padding: 1px 3px;
+    color: #d97706;
+    font-size: 7px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.dual-pill:hover { color: #b45309; }
+
+/* Remaining-time pies inside the pair trios */
+.pie-cell { font-size: 0 !important; display: flex; justify-content: center; }
+.pie-cell::before {
+    content: '';
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: conic-gradient(var(--rem-col, #8b8fa3) var(--rem-deg, 0deg), rgba(128, 128, 140, 0.15) 0);
+}
+
+
+/* Wide mode: nothing collapses â€” chevrons go, expandables stay open */
+body.landscape .expand-toggle { display: none !important; }
+body.landscape .expand-section { display: block !important; }
+
+
+/* Landscape: non-dual columns reserve the group-heading space so row tops
+   line up across all three companies */
+body.landscape .section-body:not(.has-dual) > .usage-headers {
+    margin-top: 20px;
+    height: 20px;
+    align-items: end;
+}
+
+/* Burning leaves things visibly charred until reversed */
+
+
+.dual-pill { position: relative; overflow: visible; }
+
+
+
+
+/* Soot & Sparks palette (finish #4): sooty char with speckled highlights.
+   Dark theme lifts the char so it still reads against the dark widget. */
+body {
+    --char-col: #4a3b2d;
+    --char-soot: 1px 0 0 rgba(120, 90, 62, 0.8), -1px 1px 0 rgba(20, 14, 10, 0.9), 0 -1px 0 rgba(150, 110, 72, 0.5);
+}
+
+body.theme-light {
+    --char-col: #1e1712;
+    --char-soot: 1px 0 0 rgba(70, 50, 34, 0.8), -1px 1px 0 rgba(15, 10, 8, 0.9), 0 -1px 0 rgba(90, 64, 40, 0.5);
+}
+
+@keyframes bwSpark {
+    0% { transform: translate(0, 0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--ry)) scale(0.3); opacity: 0; }
+}
+
+/* ---- Burn-alert fire ----
+   A pool that trips the token-burn detector wears a flame in ITS OWN colour
+   until the pace settles (main.js owns the hysteresis; --fire-col is set
+   from whatever colour the bar actually renders with — model colour,
+   threshold recolour, or Gemini shade — so every colour source carries
+   straight into the fire). Pure CSS, no per-frame JS. */
+@keyframes barHeatPulse {
+    from { box-shadow: 0 0 5px 1px color-mix(in srgb, var(--fire-col, #ff922b) 50%, transparent); }
+    to   { box-shadow: 0 0 11px 3px color-mix(in srgb, var(--fire-col, #ff922b) 80%, transparent); }
+}
+
+/* :not(.maxed): a spent bar keeps its own ember glow — the heat pulse and
+   flame sprites belong to a pool that is still actively burning DOWN. */
+.progress-fill.on-fire:not(.maxed),
+.compact-bar-fill.on-fire:not(.maxed) {
+    overflow: visible;
+    animation: barHeatPulse 1.1s ease-in-out infinite alternate;
+}
+
+/* The containers clip by default — let the flames out */
+.progress-bar:has(.progress-fill.on-fire),
+.compact-bar-bg:has(.compact-bar-fill.on-fire) {
+    overflow: visible;
+}
+
+/* The bars burn with LIVE pixel fire: the ambient fire loop in app.js spawns
+   the same 2px-cell flame sprites the subheading burns use — recoloured to
+   each bar via --fire-col — continuously along the whole fill. CSS keeps only
+   the heat-glow underlay (above) and hosts the spawned layers below. */
+@keyframes flameLick {
+    /* Loop-closed: 100% matches 0% so the flicker cycles without the visible
+       snap it had when the loop ended on a different pose than it began. */
+    0%   { transform: scaleY(0.72) skewX(-3deg); }
+    35%  { transform: scaleY(1.12) skewX(2deg); }
+    70%  { transform: scaleY(0.9) skewX(-1.5deg); }
+    100% { transform: scaleY(0.72) skewX(-3deg); }
+}
+
+.ambient-fire {
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+    pointer-events: none;
+    z-index: 5;
+}
+
+/* A burning bar is clickable: it cycles the flame style */
+.usage-bar-group:has(.progress-fill.on-fire),
+.compact-bar-wrap:has(.compact-bar-fill.on-fire) {
+    cursor: pointer;
+}
+
+/* Floating confirmation shown when the flame style is switched */
+@keyframes flameToastFade {
+    0% { opacity: 0; transform: translate(-50%, -90%) scale(0.9); }
+    18% { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+    75% { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -130%) scale(1); }
+}
+.flame-style-toast {
+    position: fixed;
+    z-index: 2000;
+    pointer-events: none;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    color: #ffd43b;
+    text-shadow: 0 0 6px rgba(255, 146, 43, 0.9), 0 1px 2px rgba(0, 0, 0, 0.6);
+    white-space: nowrap;
+    animation: flameToastFade 1.1s ease-out forwards;
+}
+
+/* Un-stretch the settings panel to read its true content height for the
+   grow-to-fit measurement (see fitSettingsWindow) */
+.settings-content.measuring {
+    height: auto !important;
+    align-self: flex-start !important;
+    overflow: visible !important;
+}
+
+.compact-bar-fill {
+    position: relative;
+}
+
+/* Codex banked-reset orbs idle with a faint flame in their own colour.
+   animation-delay: inherit staggers each flame with its orb's glimmer. */
+.reset-dots {
+    --fire-col: #34d0a8;
+}
+
+.reset-dot {
+    position: relative;
+}
+
+/* The orbs' fire comes from the pixel-flame engine (_tickElementFire),
+   the same one the burning bars use. There is deliberately no CSS flame
+   here: a gradient tongue read as a glow, and with animations off it sat
+   frozen on the orb, making a round dot look deformed. */
+body.no-pizazz .reset-dot .fx,
+body.no-pizazz .progress-fill .fx,
+body.no-pizazz .compact-bar-fill .fx {
+    display: none !important;
+}
+
+/* Export-history buttons in Settings */
+.export-btns { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.export-btns .settings-connect-btn { padding: 3px 10px; }
+.export-btns .settings-row-hint { font-size: 9px; }
+
+/* Compact: OpenAI banked limit-resets show as the orbs themselves. There
+   is no percentage to fill, so the bar track gives way to the bank, left
+   anchored like a bar fill so the row still scans as a row. */
+.compact-row.compact-orbs .compact-bar-wrap {
+    display: flex;
+    align-items: center;
+}
+
+.compact-row.compact-orbs .reset-dots {
+    flex: 1;
+    justify-content: flex-start;
+    gap: clamp(5px, 4%, 13px);
+    padding: 0 2px;
+}
+
+.compact-row.compact-orbs .reset-dot {
+    flex: 0 0 auto;
+    width: 7px;
+    height: 7px;
+}
+
+/* Toolbar theme cycle button: three stacked icons (moon / sun / monitor),
+   one visible per mode, swapping with a springy spin as the modes cycle. */
+/* Pinned to the bar's far left, under the robot in the title bar, while the
+   rest of the toolbar keeps its centered layout. */
+.theme-cycle-btn {
+    position: absolute;
+    left: 6px;
+    top: 3px;
+}
+
+.theme-cycle-btn .th-ico {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin: -7px 0 0 -7px;
+    opacity: 0;
+    transform: rotate(-100deg) scale(0.4);
+    transition: opacity 0.22s ease, transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+}
+
+.theme-cycle-btn[data-mode="dark"] .th-moon,
+.theme-cycle-btn[data-mode="light"] .th-sun,
+.theme-cycle-btn[data-mode="system"] .th-sys {
+    opacity: 1;
+    transform: rotate(0) scale(1);
+}
+
+/* Settings login-status line doubles as the Connect error surface */
+.login-status-error {
+    color: #ef4444 !important;
+}
+
+/* =======================================================================
+   Blueprint toolbar. Every icon is a dashed plan plus a solid part, and
+   on hover the solid part does its job: the press descends, refresh spins,
+   the key slides home, the graph line rises to its forecast, the gear
+   meshes. The clown is the one full-colour exception - see below.
+   ======================================================================= */
+.bottom-bar .control-btn { color: #7fb2d9; }
+.bottom-bar .control-btn:hover { color: #bfe3ff; background: rgba(80, 140, 200, 0.18); }
+body.theme-light .bottom-bar .control-btn { color: #33628c; }
+body.theme-light .bottom-bar .control-btn:hover { color: #1d4568; background: rgba(51, 98, 140, 0.12); }
+
+.bpg {
+    stroke-dasharray: 2.5 2;
+    opacity: 0.5;
+}
+
+.bp-press, .bp-key, .bp-line { transition: transform 0.32s ease; }
+
+/* press: hover dips the platen; compact mode holds it down on the plan */
+.press-btn:hover .bp-press { transform: translateY(3px); }
+.press-btn.pressed .bp-press { transform: translateY(5.5px); }
+
+/* refresh: one clean revolution */
+.bp-ref { transform-origin: 50% 50%; transition: transform 0.6s ease; }
+.refresh-btn:hover .bp-ref { transform: rotate(360deg); }
+
+/* auth key slides into its dashed lock */
+.local-login-refresh-btn:hover .bp-key { transform: translateX(2.5px); }
+
+/* graph: the solid line rises to meet its dashed forecast */
+.bp-line { transform: translateY(2.5px); }
+.graph-btn:hover .bp-line { transform: translateY(0); }
+
+/* settings gear meshes a notch */
+.bp-gear { transform-origin: 50% 50%; transition: transform 0.45s ease; }
+.settings-btn:hover .bp-gear { transform: rotate(60deg); }
+
+/* =======================================================================
+   The clown: whiteface in full colour inside the blueprint world.
+   Jailed (pizazz off): bars slam down, the smile flips, dashed cyan tears
+   start, and his colour drains toward the draftsman grey.
+   ======================================================================= */
+.clown-btn svg { overflow: visible; display: block; }
+
+.clown-paint { transition: filter 0.55s ease; }
+.clown-btn.jailed .clown-paint { filter: saturate(0.22) brightness(0.82); }
+
+.clown-mouth { transition: transform 0.35s ease; transform-origin: 12px 15.4px; }
+.clown-btn.jailed .clown-mouth { transform: rotate(180deg) translateY(2.6px); }
+
+.clown-tear {
+    fill: none;
+    stroke: #67e8f9;
+    stroke-width: 1.2;
+    stroke-dasharray: 1.5 2.2;
+    opacity: 0;
+    transition: opacity 0.3s ease 0.3s;
+}
+.clown-btn.jailed .clown-tear { opacity: 0.95; }
+
+.clown-cage {
+    fill: none;
+    stroke: #7fb2d9;
+    stroke-width: 1.3;
+    stroke-linecap: square;
+    transform: translateY(-16px);
+    opacity: 0;
+    transition: transform 0.34s cubic-bezier(0.6, 0, 0.9, 1), opacity 0.18s;
+}
+.clown-btn.jailed .clown-cage { transform: translateY(0); opacity: 1; }
+body.theme-light .clown-cage { stroke: #33628c; }
+
+/* Jailing him turns pizazz OFF, which freezes every transition in the app -
+   including, without these, the very bars locking him up. The last animation
+   allowed to play is the clown being jailed. (Higher specificity than the
+   global body.no-pizazz * kill, with the !important to match.) */
+body.no-pizazz .clown-cage { transition: transform 0.34s cubic-bezier(0.6, 0, 0.9, 1), opacity 0.18s !important; }
+body.no-pizazz .clown-paint {
+    transition: filter 0.55s ease !important;
+    /* The global no-pizazz rules also kill filters app-wide (that is how the
+       frozen logos thaw) - which silently erased the colour drain, since
+       jailed and no-pizazz always co-occur. Re-assert the drained look. */
+    filter: saturate(0.22) brightness(0.82) !important;
+}
+body.no-pizazz .clown-mouth { transition: transform 0.35s ease !important; }
+body.no-pizazz .clown-tear { transition: opacity 0.3s ease 0.3s !important; }
+
+/* =======================================================================
+   Local build: bigger controls, one toolbar layout.
+   Normal mode: buttons ~1.1x stock (42px round dropped 25% to 32) with the
+   original art at ~88% of the button — small padding, edge-to-edge feel.
+   Compact mode: stock 28px buttons, art filled to 22px.
+   BOTH modes share the toolbar convention the markup declares: playful
+   view controls LEFT, utility controls RIGHT — theme button in flow, the
+   spacer flexes, the utility group anchors to the right edge.
+   ======================================================================= */
+/* relative, not static: the stacked th-ico icons inside are absolutely
+   positioned and need the button itself to stay their containing block.
+   Zero the stock left/top offsets so relative doesn't shift it in flow. */
+/* OPTICALLY centred, not centred on the bar: the negative space after the
+   theme cycle and the negative space after the last utility button are
+   equal, so the set looks centred even though the theme button eats into
+   the left. An auto margin on each side of the set splits the free space
+   in two — the left gap is (free/2 + the flex gap), the right is
+   (free/2 + the bar's right padding), and those match.
+   The theme button stays in FLOW for this — position:relative, not static,
+   because its stacked .th-ico children are absolute and need the button as
+   their containing block. Same arrangement in both modes. */
+.theme-cycle-btn { position: relative; left: 0; top: 0; transform: none; margin: 0; }
+.bottom-bar { justify-content: flex-start; gap: 8px; }
+.toolbar-group-play { flex: 0 0 auto; margin-left: auto; }
+.toolbar-group-utility { flex: 0 0 auto; margin-right: auto; }
+.toolbar-spacer { flex: 0 0 auto; width: 22px; }
+body:not(.compact-mode) .toolbar-spacer { width: 44px; }
+
+/* Normal-mode sizes: 26px buttons (3px pad + 26 + 3px = 32 bar), art 22.
+   The four window-control caption buttons keep their size. */
+body:not(.compact-mode) .control-btn { width: 26px; height: 26px; }
+body:not(.compact-mode) .control-btn svg { width: 22px; height: 22px; }
+body:not(.compact-mode) .clown-btn svg { width: 24px; height: 24px; }
+body:not(.compact-mode) .theme-cycle-btn .th-ico { width: 22px; height: 22px; margin: -11px 0 0 -11px; }
+body:not(.compact-mode) .bottom-bar { height: 32px; gap: 10px; }
+body:not(.compact-mode) .bottom-bar .sprite-btn img { width: 22px; height: 22px; }
+body:not(.compact-mode) .toolbar-group { gap: 10px; }
+body:not(.compact-mode) .caption-btn { width: 40px; height: 29px; font-size: 24px; }
+body:not(.compact-mode) .caption-btn svg { width: 25px; height: 25px; }
+body:not(.compact-mode) .section-arrow { width: 18px; height: 18px; }
+body:not(.compact-mode) .section-eye { width: 20px; height: 20px; }
+body:not(.compact-mode) .section-eye svg { width: 18px; height: 18px; }
+
+/* Compact: tighter than stock — buttons shrink to 24px with the art still
+   filling them (~80%), the caption cluster pulls in (28x22 buttons), and
+   the one-line title gets the room the wider 320px window provides. */
+body.compact-mode .control-btn { width: 19px; height: 19px; }
+body.compact-mode .control-btn svg { width: 15px; height: 15px; }
+body.compact-mode .clown-btn svg { width: 17px; height: 17px; }
+body.compact-mode .theme-cycle-btn .th-ico { width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px; }
+body.compact-mode .caption-btn { width: 28px; height: 22px; font-size: 15px; }
+body.compact-mode .caption-btn svg { width: 12px; height: 12px; }
+body.compact-mode .title { font-size: 13px; }
+body.compact-mode .title span { white-space: nowrap; }
+
+/* The CLI-logins prompt cursor blinks while hovered; steps(1) with matching
+   endpoints so the loop closes without a visible seam. */
+.local-login-refresh-btn:hover .bp-cursor { animation: cursorBlink 0.9s steps(1) infinite; }
+@keyframes cursorBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* Slinky (compact button): coils ride down and bunch onto the base plate
+   as the widget squeezes. Hover previews about half the travel; .pressed
+   (compact actually on) goes all the way down. */
+.sl-plate,
+.sl-coils ellipse { transition: transform 0.34s cubic-bezier(0.4, 0, 0.2, 1); }
+.press-btn:hover .sl-plate { transform: translateY(4.5px); }
+.press-btn:hover .sl-coils ellipse:nth-child(1) { transform: translateY(4px); }
+.press-btn:hover .sl-coils ellipse:nth-child(2) { transform: translateY(2.9px); }
+.press-btn:hover .sl-coils ellipse:nth-child(3) { transform: translateY(1.8px); }
+.press-btn:hover .sl-coils ellipse:nth-child(4) { transform: translateY(0.7px); }
+.press-btn.pressed .sl-plate { transform: translateY(9px); }
+.press-btn.pressed .sl-coils ellipse:nth-child(1) { transform: translateY(8px); }
+.press-btn.pressed .sl-coils ellipse:nth-child(2) { transform: translateY(5.8px); }
+.press-btn.pressed .sl-coils ellipse:nth-child(3) { transform: translateY(3.6px); }
+.press-btn.pressed .sl-coils ellipse:nth-child(4) { transform: translateY(1.4px); }
+
+/* Clown: the head fills the button instead of floating in it. The cage is
+   deliberately left unscaled — the bars still frame the button edges. */
+.clown-paint,
+.clown-tear { transform: scale(1.25); transform-origin: 12px 12.3px; }
+
+/* Alert-sound settings rows: volume, preview, file picker, reset-to-default */
+.settings-sound-block { margin: 2px 0 6px; }
+.sound-controls { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.sound-vol { width: 74px; accent-color: #8b5cf6; flex: 0 0 auto; cursor: pointer; }
+.sound-btn {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.06);
+    color: #c7d3ea; border-radius: 6px; padding: 3px 8px;
+    font-size: 11px; line-height: 1.4; cursor: pointer; white-space: nowrap;
+    transition: background .15s, border-color .15s, color .15s;
+}
+.sound-btn:hover { background: rgba(139, 92, 246, 0.22); border-color: #8b5cf6; color: #fff; }
+.sound-filename {
+    font-size: 11px; color: #8a8a9a; margin: -2px 0 8px 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+body.theme-light .sound-btn { border-color: rgba(0, 0, 0, 0.16); background: rgba(0, 0, 0, 0.04); color: #35415e; }
+body.theme-light .sound-btn:hover { background: rgba(139, 92, 246, 0.16); border-color: #8b5cf6; color: #1a1a2e; }
+body.theme-light .sound-filename { color: #6a7694; }
+
+/* =======================================================================
+   MAXED OUT (100%). The bar goes black and smoulders — the fire has
+   already been and gone. Two offset puff layers drift up and dissipate;
+   the containers un-clip so the smoke can leave the bar.
+   Declared after the .danger/.warning fills so it wins on equal specificity.
+   ======================================================================= */
+.progress-fill.maxed,
+.compact-bar-fill.maxed {
+    background: linear-gradient(90deg, #241f1d 0%, #0a0a0a 100%) !important;
+    box-shadow: inset 0 0 7px rgba(0, 0, 0, 0.95), 0 0 5px rgba(0, 0, 0, 0.5);
+}
+.progress-bar:has(.progress-fill.maxed),
+.compact-bar-bg:has(.compact-bar-fill.maxed) { overflow: visible; }
+
+.progress-fill.maxed,
+.compact-bar-fill.maxed { position: relative; overflow: visible; }
+
+/* Embers still glowing along the top edge of the dead bar */
+.progress-fill.maxed::after,
+.compact-bar-fill.maxed::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    border-radius: 3px 3px 0 0;
+    background: linear-gradient(90deg,
+        rgba(255, 122, 40, 0) 0%, rgba(255, 138, 50, 0.75) 22%,
+        rgba(255, 96, 30, 0.35) 48%, rgba(255, 150, 60, 0.8) 74%,
+        rgba(255, 110, 35, 0) 100%);
+    animation: emberGlow 2.3s ease-in-out infinite alternate;
+    pointer-events: none;
+}
+@keyframes emberGlow { from { opacity: 0.35; } to { opacity: 0.95; } }
+
+/* Smoke uses the same pixel sprites the bars burn with, but its host layer
+   deliberately does NOT carry the .fx class: `.usage-section .fx { inset:0 }`
+   is two classes and would beat this rule, collapsing the layer to the bar's
+   own ~6px box and dumping the sprites below it. Anchored with bottom:100%
+   the layer sits entirely ABOVE the bar, so sprites rise off the char. */
+.maxed-smoke {
+    position: absolute;
+    left: 0; right: 0;
+    bottom: 100%;
+    height: 38px;
+    pointer-events: none;
+    overflow: visible;
+    z-index: 6;
+    contain: layout style;
+}
+.maxed-smoke .fp {
+    position: absolute;
+    pointer-events: none;
+    transform-origin: 50% 100%;
+    will-change: transform, opacity;
+}
+body.no-pizazz .maxed-smoke { display: none; }
+
+/* An orb that knows its own expiry is hoverable. Urgency is staged: green
+   while there's runway, amber once under a week, red inside 24 hours — the
+   pulse tightens as it gets worse, so it reads without opening the tooltip. */
+.reset-dot.has-detail { cursor: help; }
+
+.reset-dot.expiring-week {
+    background: #f59e0b;
+    --fire-col: #f59e0b;   /* the pixel flame reads this off the orb */
+    animation: resetExpWeek 1.6s ease-in-out infinite alternate;
+}
+@keyframes resetExpWeek {
+    from { box-shadow: 0 0 3px 1px rgba(245, 158, 11, 0.40); }
+    to   { box-shadow: 0 0 8px 2px rgba(245, 158, 11, 0.75); }
+}
+
+.reset-dot.expiring-soon {
+    background: #ef4444;
+    --fire-col: #ef4444;
+    animation: resetExpSoon 0.85s ease-in-out infinite alternate;
+}
+@keyframes resetExpSoon {
+    from { box-shadow: 0 0 4px 1px rgba(239, 68, 68, 0.50); }
+    to   { box-shadow: 0 0 10px 3px rgba(239, 68, 68, 0.9); }
+}
+
+/* Grid children default to min-width:auto, so a cell whose content is wider
+   than its track refuses to shrink and overflows to the RIGHT — dragging its
+   centre off the header's. Measured in landscape/sz3: the Resets-In cell ran
+   166..238 inside a 166..202 track, putting it 18px right of the "IN" header.
+   Letting every cell shrink to its track keeps each column centred on its
+   own header at every rung of the size ladder. */
+.usage-section > *,
+.usage-headers > * { min-width: 0; }
+
+/* Once the bar itself is hidden (sz1 and narrower) the cell holds only the
+   percentage. Right-aligning it left it sitting off the centred "USED"
+   header above; with nothing else in the cell, centre it so the number
+   lines up with its own column heading. */
+body.sz1 .usage-bar-group,
+body.lbl-code .usage-bar-group { justify-content: center; }
+
+/* sz4 drops the Resets-At VALUE (.resets-at-text) but the header cell is a
+   .col-header, so the header kept five children against a four-column grid
+   and the fifth wrapped onto its own line at the far left. Drop it too. */
+body.sz4 .usage-headers > :last-child { display: none; }

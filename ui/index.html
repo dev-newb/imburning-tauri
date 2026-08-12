@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'none';
+        script-src 'self';
+        style-src 'self' 'unsafe-inline';
+        font-src 'self';
+        img-src 'self' data:;
+        media-src 'self' data:;
+        connect-src 'none';
+    ">
+    <title>I'm Burning!</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="../../node_modules/chart.js/dist/chart.umd.js"></script>
+    <!-- Must precede app.js: it defines the window.electronAPI app.js expects. -->
+    <script src="tauri-shim.js"></script>
+    <script src="chart-utils.js"></script>
+</head>
+
+<body>
+    <div id="app">
+        <div class="widget-container" id="widgetContainer">
+            <!-- Title Bar -->
+            <div class="title-bar" id="titleBar">
+                <div class="title">
+                    <img src="../../assets/logo.png" alt="Logo" class="app-logo">
+                    <span>I'm Burning!</span>
+                </div>
+                <div class="title-caption">
+                    <button class="caption-btn caption-minimize" id="minimizeBtn" title="Minimise to System Tray">−</button>
+                    <button class="caption-btn preset-btn" id="wideBtn" title="Wide layout — spread the sections into side-by-side columns">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="1.5" /></svg>
+                    </button>
+                    <button class="caption-btn preset-btn" id="tallBtn" title="Tall layout — stack the sections with room to breathe">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="1.5" /></svg>
+                    </button>
+                    <button class="caption-btn caption-close" id="closeBtn" title="Exit Application">×</button>
+                </div>
+            </div>
+
+            <!-- Centered toolbar: playful view controls left, utility controls right. -->
+            <div class="bottom-bar" id="bottomBar">
+                <!-- Theme cycle: dark -> light -> system. Leftmost, under the robot. -->
+                <button class="control-btn theme-cycle-btn" id="themeCycleBtn" data-mode="dark" title="Theme: dark — click for light">
+                    <!-- Half-moon: one bold crescent, no dashed ring — same
+                         treatment as the sun below, so both read at small size -->
+                    <svg class="th-ico th-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square">
+                        <path d="M20.8 13.6A9.3 9.3 0 1 1 10.4 3.2 7.3 7.3 0 0 0 20.8 13.6z" />
+                    </svg>
+                    <!-- Sun: small core, long detached rays, no guide ring — the
+                         ringed-spoke version read as a second settings gear. -->
+                    <svg class="th-ico th-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square">
+                        <circle cx="12" cy="12" r="3.8" />
+                        <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.2 2.2M16.2 16.2l2.2 2.2M5.6 18.4l2.2-2.2M16.2 7.8l2.2-2.2" />
+                    </svg>
+                    <!-- System = follow the macOS appearance setting -->
+                    <svg class="th-ico th-sys" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square">
+                        <rect x="2.5" y="4" width="19" height="12.5" rx="1.5" />
+                        <path class="bpg" d="M8 21h8M12 16.5V21" />
+                    </svg>
+                </button>
+                <div class="toolbar-group toolbar-group-play">
+                    <button class="control-btn press-btn" id="compactPressBtn" title="Compact mode — squeeze the widget down">
+                        <!-- Slinky: coils at full length in normal mode, bunched
+                             down onto the base plate when compact is on. -->
+                        <!-- Coils are open arcs, not closed ellipses: half the ink,
+                             so the gaps survive at the small compact size. -->
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                            <path class="sl-plate" d="M4.5 3.5h15" />
+                            <g class="sl-coils">
+                                <path d="M5 6a7 1.8 0 0 0 14 0" />
+                                <path d="M5 9.8a7 1.8 0 0 0 14 0" />
+                                <path d="M5 13.6a7 1.8 0 0 0 14 0" />
+                                <path d="M5 17.4a7 1.8 0 0 0 14 0" />
+                            </g>
+                            <path d="M4.5 20.5h15" />
+                        </svg>
+                    </button>
+                    <!-- The one full-colour character in the blueprint world. Jailing
+                         (effects off) slams the bars down and drains his colour. -->
+                    <button class="control-btn clown-btn" id="clownBtn" title="Pizazz: ON — click to jail the clown and turn off all visual effects">
+                        <svg width="22" height="22" viewBox="0 0 24 24">
+                            <g class="clown-paint">
+                                <circle cx="12" cy="12.3" r="7" fill="#fbf7ef" stroke="#c9d4e0" stroke-width=".55" />
+                                <path d="M5.6 9.3a6.9 6.9 0 0 1 12.8 0 12 12 0 0 0-12.8 0z" fill="#4b3a6b" />
+                                <path d="M9.4 9.6l-1 1.4M9.4 9.6l1 1.4M14.6 9.6l-1 1.4M14.6 9.6l1 1.4" stroke="#3aa0d8" stroke-width=".8" stroke-linecap="round" fill="none" />
+                                <circle cx="9.4" cy="11.6" r=".8" fill="#22303f" />
+                                <circle cx="14.6" cy="11.6" r=".8" fill="#22303f" />
+                                <circle cx="12" cy="13" r="1.6" fill="#e63946" />
+                                <circle cx="11.5" cy="12.5" r=".45" fill="#ff8f98" />
+                                <path class="clown-mouth" d="M8.4 14.7q3.6 3.2 7.2 0" stroke="#c1121f" stroke-width="1.7" fill="none" stroke-linecap="round" />
+                                <circle cx="6.6" cy="18.3" r="1.2" fill="#e63946" />
+                                <circle cx="9.3" cy="19.4" r="1.2" fill="#f4b400" />
+                                <circle cx="12" cy="19.8" r="1.2" fill="#3fa652" />
+                                <circle cx="14.7" cy="19.4" r="1.2" fill="#3a7bd5" />
+                                <circle cx="17.4" cy="18.3" r="1.2" fill="#8b5cf6" />
+                            </g>
+                            <g class="clown-tear"><path d="M9.4 13.2v5M14.6 13.2v5" /></g>
+                            <g class="clown-cage"><path d="M5 1v21M8.5 1v21M12 1v21M15.5 1v21M19 1v21M4 1h16M4 22h16" /></g>
+                        </svg>
+                    </button>
+                </div>
+                <span class="toolbar-spacer" aria-hidden="true"></span>
+                <div class="toolbar-group toolbar-group-utility">
+                    <button class="control-btn refresh-btn" id="refreshBtn" title="Refresh usage">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square">
+                            <circle class="bpg" cx="12" cy="12" r="8.2" />
+                            <g class="bp-ref"><path d="M12 3.8a8.2 8.2 0 0 1 7.4 4.7" /><path d="M20 3.4v5h-5" /></g>
+                        </svg>
+                    </button>
+                    <button class="control-btn local-login-refresh-btn" id="refreshLocalLoginsBtn" title="Refresh local CLI logins and account tokens" aria-label="Refresh local CLI logins">
+                        <!-- Terminal prompt, matching the >_ pill the collapsed
+                             CLI rows use: dashed screen plan, solid prompt. -->
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square">
+                            <rect class="bpg" x="2.5" y="4" width="19" height="16" rx="1.5" />
+                            <g class="bp-key"><path d="M6.5 8.8l4 3.4-4 3.4" /></g>
+                            <path class="bp-cursor" d="M13.5 15.6h5" />
+                        </svg>
+                    </button>
+                    <button class="control-btn graph-btn" id="graphBtn" title="Toggle Usage Graph">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square">
+                            <path d="M3 3v18h18" />
+                            <polyline class="bpg" points="5 13 9 8 13 10 20 3" />
+                            <polyline class="bp-line" points="5 15 9 10 13 12 20 5" />
+                        </svg>
+                    </button>
+                </div>
+                <!-- Settings lives at the far right of the bar, apart from the
+                     utility group — the one control that isn't about usage. -->
+                <button class="control-btn settings-btn" id="settingsBtn" title="Settings">
+                    <!-- A real toothed gear (8 trapezoidal teeth + hub), so it
+                         can't be confused with the theme button's sun. -->
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <g class="bp-gear">
+                            <path d="M10.25 6.26L10.34 3.46A8.70 8.70 0 0 1 13.66 3.46L13.75 6.26A6.00 6.00 0 0 1 14.82 6.70L16.86 4.79A8.70 8.70 0 0 1 19.21 7.14L17.30 9.18A6.00 6.00 0 0 1 17.74 10.25L20.54 10.34A8.70 8.70 0 0 1 20.54 13.66L17.74 13.75A6.00 6.00 0 0 1 17.30 14.82L19.21 16.86A8.70 8.70 0 0 1 16.86 19.21L14.82 17.30A6.00 6.00 0 0 1 13.75 17.74L13.66 20.54A8.70 8.70 0 0 1 10.34 20.54L10.25 17.74A6.00 6.00 0 0 1 9.18 17.30L7.14 19.21A8.70 8.70 0 0 1 4.79 16.86L6.70 14.82A6.00 6.00 0 0 1 6.26 13.75L3.46 13.66A8.70 8.70 0 0 1 3.46 10.34L6.26 10.25A6.00 6.00 0 0 1 6.70 9.18L4.79 7.14A8.70 8.70 0 0 1 7.14 4.79L9.18 6.70A6.00 6.00 0 0 1 10.25 6.26Z" />
+                            <circle cx="12" cy="12" r="2.5" />
+                        </g>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Update Banner (hidden by default) -->
+            <div class="update-banner" id="updateBanner" style="display: none;">
+                <span class="update-banner-text" id="updateBannerText"></span>
+                <button class="update-banner-dismiss" id="updateBannerDismiss" title="Dismiss" aria-label="Dismiss update banner">✕</button>
+            </div>
+            <div class="stale-banner" id="staleBanner" style="display: none;" role="status">
+                <span class="stale-banner-text">⚠ Claude.ai unreachable — data may be stale. If this persists, re-log in Settings.</span>
+            </div>
+
+            <!-- Loading State -->
+            <div class="loading-container" id="loadingContainer">
+                <div class="spinner"></div>
+                <p>Loading usage data...</p>
+            </div>
+
+            <!-- No Usage State -->
+            <div class="no-usage-container" id="noUsageContainer" style="display: none;">
+                <div class="no-usage-content">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <div class="no-usage-text-group">
+                        <h3>No Usage Yet</h3>
+                        <p>Start chatting with Claude to see your usage stats</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="content" id="mainContent" style="display: none;">
+
+                <!-- ANTHROPIC provider section -->
+                <div class="provider-section" id="sectionAnthropic">
+                    <div class="section-header" id="headerAnthropic">
+                        <svg class="section-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9" /></svg>
+                        <button class="section-eye" id="eyeAnthropic" title="Show/hide Anthropic tray icons">
+                            <svg class="eye-open" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            <svg class="eye-closed" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        </button>
+                        <span class="ice-wrap"><span class="section-name brand-anthropic" data-ice="Anthropic">Anthropic</span></span>
+                    </div>
+                    <div class="section-body" id="bodyAnthropic">
+                        <div class="usage-headers section-col-headers">
+                            <span></span>
+                            <span class="col-header col-header-center" data-short="Used">Session Used</span>
+                            <span class="col-header col-header-center" data-short="Elap">Elapsed</span>
+                            <span class="col-header col-header-center" data-short="In">Resets In</span>
+                            <span class="col-header col-header-center" data-short="At">Resets At</span>
+                        </div>
+
+                        <!-- Desktop subgroup (subheading appears only when a CLI twin exists) -->
+                        <div class="subgroup" id="sgAnthropicDesktop">
+                            <div class="subheading-row" style="display: none;"><button class="subheading" data-key="anthropic_desktop" data-label="Desktop"></button></div>
+                            <div class="subgroup-roll"><div class="subgroup-inner">
+
+                <!-- Session Usage -->
+                <div class="usage-section">
+                    <span class="usage-label" data-code="CLA 5H" data-abbr="Claude Session (5H)" data-tip="5-hour session limit" style="--row-col: #e0916f;">Claude Session (5h)</span>
+                    <div class="usage-bar-group">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="sessionProgress" style="width: 0%"></div>
+                        </div>
+                        <span class="usage-percentage" id="sessionPercentage">0%</span>
+                    </div>
+                    <div class="usage-elapsed-group">
+                        <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
+                            <circle class="timer-bg" cx="12" cy="12" r="10" />
+                            <circle class="timer-progress" id="sessionTimer" cx="12" cy="12" r="10"
+                                style="stroke-dasharray: 63; stroke-dashoffset: 63" />
+                        </svg>
+                    </div>
+                    <div class="timer-text" id="sessionTimeText">--:--</div>
+                    <div class="resets-at-text" id="sessionResetsAt">--</div>
+                </div>
+
+                <!-- Weekly Usage -->
+                <div class="usage-section">
+                    <span class="usage-label" data-code="CLA 7D" data-abbr="Claude Models (7D)" data-tip="7-day limit across all Claude models — resets weekly" style="--row-col: #d97757;">Claude Models (7d)</span>
+                    <div class="usage-bar-group">
+                        <div class="progress-bar">
+                            <div class="progress-fill weekly" id="weeklyProgress" style="width: 0%"></div>
+                        </div>
+                        <span class="usage-percentage" id="weeklyPercentage">0%</span>
+                    </div>
+                    <div class="usage-elapsed-group">
+                        <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
+                            <circle class="timer-bg" cx="12" cy="12" r="10" />
+                            <circle class="timer-progress weekly" id="weeklyTimer" cx="12" cy="12" r="10"
+                                style="stroke-dasharray: 63; stroke-dashoffset: 63" />
+                        </svg>
+                    </div>
+                    <div class="timer-text" id="weeklyTimeText">--:--</div>
+                    <div class="resets-at-text" id="weeklyResetsAt">--</div>
+                </div>
+
+                <!-- Scoped weekly limits (e.g. Fable) — always visible, never collapsed -->
+                <div id="scopedRows"></div>
+
+
+                <!-- Expandable Details (toggle sits BELOW the content it reveals) -->
+                <div class="expand-section" id="expandSection" style="display: none;">
+                    <div id="extraRows"></div>
+                </div>
+
+                <!-- Expand Toggle -->
+                <div class="expand-toggle" id="expandToggle">
+                    <svg class="expand-arrow" id="expandArrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                </div>
+                            </div></div><!-- /subgroup-roll -->
+                        </div><!-- /sgAnthropicDesktop -->
+
+                        <div class="dual-table" id="dualTableAnthropic"></div>
+
+                        <!-- CLI subgroup (second-account rows; dual mode only) -->
+                        <div class="subgroup" id="sgAnthropicCli" style="display: none;">
+                            <div class="subheading-row"><button class="subheading cli-pill" data-key="anthropic_cli" data-label="CLI: 2ND ACCOUNT"></button></div>
+                            <div class="subgroup-roll"><div class="subgroup-inner">
+                                <div id="anthropicCliRows"></div>
+                            </div></div>
+                        </div>
+
+                        <div class="section-footer">
+                            <div class="plan-note" id="planNote" style="display: none;"></div>
+                            <span class="section-chip" id="chipAnthropic" style="display: none;"></span>
+                        </div>
+                    </div><!-- /bodyAnthropic -->
+                </div><!-- /sectionAnthropic -->
+
+                <!-- OPENAI provider section -->
+                <div class="provider-section" id="sectionOpenai" style="display: none;">
+                    <div class="section-header" id="headerOpenai">
+                        <svg class="section-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9" /></svg>
+                        <button class="section-eye" id="eyeOpenai" title="Show/hide OpenAI tray icon">
+                            <svg class="eye-open" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            <svg class="eye-closed" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        </button>
+                        <span class="ice-wrap"><span class="section-name brand-openai" data-ice="OpenAI">OpenAI</span></span>
+                    </div>
+                    <div class="section-body" id="bodyOpenai">
+                        <div class="connect-row" id="connectRowOpenai" style="display: none;">
+                            <button class="provider-connect-btn" id="connectOpenaiBtn">Sign in with ChatGPT</button>
+                            <span class="connect-error" id="connectErrorOpenai"></span>
+                        </div>
+                        <div class="usage-headers section-col-headers">
+                            <span></span>
+                            <span class="col-header col-header-center" data-short="Used">Session Used</span>
+                            <span class="col-header col-header-center" data-short="Elap">Elapsed</span>
+                            <span class="col-header col-header-center" data-short="In">Resets In</span>
+                            <span class="col-header col-header-center" data-short="At">Resets At</span>
+                        </div>
+                        <div class="subgroup" id="sgOpenaiDesktop">
+                            <div class="subheading-row" style="display: none;"><button class="subheading" data-key="openai_desktop" data-label="Desktop"></button></div>
+                            <div class="subgroup-roll"><div class="subgroup-inner">
+                                <div id="openaiRows"></div>
+                                <div class="expand-section" id="openaiExtras">
+                                    <div id="openaiExtraRows"></div>
+                                </div>
+                                <div class="expand-toggle" id="openaiExpandToggle" style="display: none;">
+                                    <svg class="expand-arrow expanded" id="openaiExpandArrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </div>
+                            </div></div>
+                        </div>
+                        <div class="dual-table" id="dualTableOpenai"></div>
+                        <div class="subgroup" id="sgOpenaiCli" style="display: none;">
+                            <div class="subheading-row"><button class="subheading cli-pill" data-key="openai_cli" data-label="CLI: 2ND ACCOUNT"></button></div>
+                            <div class="subgroup-roll"><div class="subgroup-inner">
+                                <div id="openaiCliRows"></div>
+                            </div></div>
+                        </div>
+                        <div class="section-footer">
+                            <div class="plan-note" id="planNoteOpenai" style="display: none;"></div>
+                            <span class="section-chip" id="chipOpenai" style="display: none;"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GOOGLE provider section -->
+                <div class="provider-section" id="sectionGoogle" style="display: none;">
+                    <div class="section-header" id="headerGoogle">
+                        <svg class="section-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9" /></svg>
+                        <button class="section-eye" id="eyeGoogle" title="Show/hide Google tray icon">
+                            <svg class="eye-open" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            <svg class="eye-closed" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        </button>
+                        <span class="ice-wrap"><span class="section-name brand-google" data-ice="Google"><span class="g-b">G</span><span class="g-r">o</span><span class="g-y">o</span><span class="g-b">g</span><span class="g-g">l</span><span class="g-r">e</span></span></span>
+                    </div>
+                    <div class="section-body" id="bodyGoogle">
+                        <div class="connect-row" id="connectRowGoogle" style="display: none;">
+                            <button class="provider-connect-btn" id="connectGoogleBtn">Sign in with Google</button>
+                            <span class="connect-error" id="connectErrorGoogle"></span>
+                        </div>
+                        <div class="usage-headers section-col-headers">
+                            <span></span>
+                            <span class="col-header col-header-center" data-short="Used">Session Used</span>
+                            <span class="col-header col-header-center" data-short="Elap">Elapsed</span>
+                            <span class="col-header col-header-center" data-short="In">Resets In</span>
+                            <span class="col-header col-header-center" data-short="At">Resets At</span>
+                        </div>
+                        <div class="subgroup" id="sgGoogleDesktop">
+                            <div class="subheading-row" style="display: none;"><button class="subheading" data-key="google_desktop" data-label="Desktop"></button></div>
+                            <div class="subgroup-roll"><div class="subgroup-inner">
+                                <div id="googleRows"></div>
+                            </div></div>
+                        </div>
+                        <div class="dual-table" id="dualTableGoogle"></div>
+                        <div class="subgroup" id="sgGoogleCli" style="display: none;">
+                            <div class="subheading-row"><button class="subheading cli-pill" data-key="google_cli" data-label="CLI: 2ND ACCOUNT"></button></div>
+                            <div class="subgroup-roll"><div class="subgroup-inner">
+                                <div id="googleCliRows"></div>
+                            </div></div>
+                        </div>
+                        <div class="section-footer">
+                            <div class="plan-note" id="planNoteGoogle" style="display: none;"></div>
+                            <span class="section-chip" id="chipGoogle" style="display: none;"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="graph-section" id="graphSection" style="display: none;">
+                    <button class="psychic-btn" id="psychicBtn" title="Forecast projections: ON — the psychic sees your future burn">
+                        <img id="psychicImg" src="../../assets/psychic-on.png" alt="Forecast toggle psychic">
+                    </button>
+                    <button class="graph-popout-btn" id="graphPopoutBtn" title="Pop the graph out into its own always-on-top window">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 3h7v7" />
+                            <path d="M10 14 21 3" />
+                            <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
+                        </svg>
+                    </button>
+                    <canvas id="usageChart" role="img" aria-label="Usage history chart"></canvas>
+                </div>
+
+
+            </div>
+
+            <!-- Compact Content (enter/exit via the title-bar press button) -->
+            <div class="compact-content" id="compactContent" style="display: none;">
+                <!-- Rows are built dynamically: one slim bar per active pool
+                     across ALL providers, grouped by company edge colour -->
+                <div class="compact-rows" id="compactRows"></div>
+            </div>
+
+            <!-- Settings Overlay (normal mode) -->
+            <div class="settings-overlay" id="settingsOverlay" style="display: none;">
+                <div class="settings-content">
+                    <div class="settings-header">
+                        <span class="settings-title">Settings</span>
+                        <button class="done-settings-btn" id="closeSettingsBtn" title="Done">Done</button>
+                    </div>
+
+                    <div class="settings-rows">
+                        <!-- Global settings -->
+                        <div class="settings-row-2col">
+                            <div class="settings-col" id="autoStartCol">
+                                <span class="settings-row-label">Launch at startup</span>
+                                <label class="toggle-switch"><input type="checkbox" id="autoStartToggle"><span class="toggle-slider"></span></label>
+                                <span class="settings-row-hint" id="autoStartHint" style="display: none;">Not supported on Linux</span>
+                            </div>
+                            <div class="settings-col">
+                                <span class="settings-row-label" id="trayLabel">Hide from taskbar</span>
+                                <label class="toggle-switch"><input type="checkbox" id="minimizeToTrayToggle"><span class="toggle-slider"></span></label>
+                            </div>
+                        </div>
+                        <div class="settings-row-2col">
+                            <div class="settings-col">
+                                <span class="settings-row-label">Always on top</span>
+                                <label class="toggle-switch"><input type="checkbox" id="alwaysOnTopToggle"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-col">
+                                <span class="settings-row-label">Compact mode</span>
+                                <label class="toggle-switch"><input type="checkbox" id="compactModeToggle"><span class="toggle-slider"></span></label>
+                            </div>
+                        </div>
+                        <div class="settings-row-2col">
+                            <div class="settings-col">
+                                <span class="settings-row-label">Usage Alerts</span>
+                                <label class="toggle-switch"><input type="checkbox" id="usageAlertsToggle"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-col">
+                                <span class="settings-row-label">Burn-spike alert</span>
+                                <label class="toggle-switch"><input type="checkbox" id="burnAlertsToggle"><span class="toggle-slider"></span></label>
+                            </div>
+                        </div>
+
+                        <!-- Alert sounds: each can be switched off, pointed at a
+                             file of the user's own, volume-adjusted and previewed. -->
+                        <div class="settings-sound-block">
+                            <div class="settings-row-2col">
+                                <div class="settings-col">
+                                    <span class="settings-row-label" title="Plays when a limit clears early — a banked/immediate reset">Early-reset sound</span>
+                                    <label class="toggle-switch"><input type="checkbox" id="soundResetToggle"><span class="toggle-slider"></span></label>
+                                </div>
+                                <div class="settings-col sound-controls">
+                                    <input type="range" id="soundResetVolume" class="sound-vol" min="0" max="100" value="85" title="Volume">
+                                    <button class="sound-btn" id="soundResetTest" title="Preview">▶</button>
+                                    <button class="sound-btn" id="soundResetPick" title="Choose an audio file">Choose…</button>
+                                    <button class="sound-btn" id="soundResetReset" title="Back to the bundled sound">Default</button>
+                                </div>
+                            </div>
+                            <div class="sound-filename" id="soundResetName">Default (heavenly choir)</div>
+
+                            <div class="settings-row-2col">
+                                <div class="settings-col">
+                                    <span class="settings-row-label" title="Plays when the burn detector trips on a series">Burn-spike sound</span>
+                                    <label class="toggle-switch"><input type="checkbox" id="soundBurnToggle"><span class="toggle-slider"></span></label>
+                                </div>
+                                <div class="settings-col sound-controls">
+                                    <input type="range" id="soundBurnVolume" class="sound-vol" min="0" max="100" value="85" title="Volume">
+                                    <button class="sound-btn" id="soundBurnTest" title="Preview">▶</button>
+                                    <button class="sound-btn" id="soundBurnPick" title="Choose an audio file">Choose…</button>
+                                    <button class="sound-btn" id="soundBurnReset" title="Back to the bundled sound">Default</button>
+                                </div>
+                            </div>
+                            <div class="sound-filename" id="soundBurnName">Default (fire)</div>
+                        </div>
+                        <div class="settings-row-2col">
+                            <div class="settings-col"></div>
+                            <div class="settings-col"></div>
+                        </div>
+                        <!-- Theme moved to the toolbar: the leftmost cycle button. -->
+                        <div class="settings-row-2col">
+                            <div class="settings-col" id="orgSelectorCol" style="display: none;">
+                                <span class="settings-row-label">Organization</span>
+                                <select id="orgSelector" class="settings-select">
+                                    <option value="org1">My Org (Personal)</option>
+                                    <option value="org2">Acme Corp (Team)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="settings-row-2col">
+                            <div class="settings-col">
+                                <span class="settings-row-label">Time format</span>
+                                <select id="timeFormat" class="settings-select">
+                                    <option value="12h">12h (3:59 PM)</option>
+                                    <option value="24h">24h (15:59)</option>
+                                </select>
+                            </div>
+                            <div class="settings-col">
+                                <span class="settings-row-label">Date format</span>
+                                <select id="weeklyDateFormat" class="settings-select">
+                                    <option value="date">Mar 13</option>
+                                    <option value="date-day">Fri Mar 13</option>
+                                    <option value="date-day-time">Fri Mar 13 + time</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="settings-row-2col">
+                            <div class="settings-col">
+                                <span class="settings-row-label">Warn at</span>
+                                <div class="threshold-group">
+                                    <label class="threshold-label">
+                                        <span class="threshold-dot warning-dot"></span>
+                                        <input type="number" id="warnThreshold" class="threshold-input" min="1" max="99" value="75">
+                                        <span class="threshold-pct">%</span>
+                                    </label>
+                                    <label class="threshold-label">
+                                        <span class="threshold-dot danger-dot"></span>
+                                        <input type="number" id="dangerThreshold" class="threshold-input" min="1" max="99" value="90">
+                                        <span class="threshold-pct">%</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="settings-col">
+                                <span class="settings-row-label">Auto-refresh</span>
+                                <select id="refreshInterval" class="settings-select">
+                                    <option value="15">Every 15s</option>
+                                    <option value="30">Every 30s</option>
+                                    <option value="60">Every 1 min</option>
+                                    <option value="120">Every 2 min</option>
+                                    <option value="300" selected>Every 5 min</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="settings-row-2col">
+                            <div class="settings-col">
+                                <span class="settings-row-label">Critical outline</span>
+                                <span class="tray-color-pair">
+                                    <label class="toggle-switch"><input type="checkbox" id="trayOutlineToggle"><span class="toggle-slider"></span></label>
+                                    <input type="color" id="trayOutlineColor" title="Outline color">
+                                </span>
+                            </div>
+                            <div class="settings-col">
+                                <span class="settings-row-label">Font colour</span>
+                                <span class="tray-color-pair">
+                                    <label class="toggle-switch"><input type="checkbox" id="fontColorToggle"><span class="toggle-slider"></span></label>
+                                    <input type="color" id="fontColorPicker" title="Widget text colour">
+                                </span>
+                                <span class="settings-row-hint">Off = theme default</span>
+                            </div>
+                        </div>
+                        <div class="settings-row-2col webhook-row">
+                            <div class="settings-col">
+                                <span class="settings-row-label">Phone alerts</span>
+                                <label class="toggle-switch"><input type="checkbox" id="webhookToggle"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-col">
+                                <span class="settings-row-label">Webhook / ntfy URL</span>
+                                <input type="text" id="webhookUrl" class="settings-select webhook-url" placeholder="https://ntfy.sh/your-topic" spellcheck="false">
+                            </div>
+                        </div>
+                        <div class="settings-row-2col">
+                            <div class="settings-col">
+                                <span class="settings-row-label">Daily digest</span>
+                                <label class="toggle-switch"><input type="checkbox" id="dailyDigestToggle"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-col">
+                                <span class="settings-row-label">Export history</span>
+                                <span class="export-btns">
+                                    <button class="settings-connect-btn" id="exportCsvBtn" title="Save your recorded usage history as a CSV file">CSV</button>
+                                    <button class="settings-connect-btn" id="exportJsonBtn" title="Save your recorded usage history as a JSON file">JSON</button>
+                                    <span class="settings-row-hint" id="exportStatus"></span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="settings-row-2col">
+                            <div class="settings-col">
+                                <span class="settings-row-label">Sort models by usage</span>
+                                <label class="toggle-switch"><input type="checkbox" id="sortByUsageToggle" aria-label="Sort models by usage"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-col">
+                                <span class="settings-row-hint">Most-used pools rise to the top of each company. Session &amp; Weekly stay pinned.</span>
+                            </div>
+                        </div>
+
+                        <!-- Per-company settings: one column per provider, login controls lowest -->
+                        <div class="settings-providers">
+                            <div class="provider-col">
+                                <div class="provider-col-title pct-anthropic">Anthropic</div>
+                                <div class="provider-col-body">
+                                    <span class="settings-row-label">Session tray</span>
+                                    <span class="tray-color-pair"><input type="color" id="traySessionBg" title="Background"><input type="color" id="traySessionText" title="Number"></span>
+                                    <span class="settings-row-label">Weekly tray</span>
+                                    <span class="tray-color-pair"><input type="color" id="trayWeeklyBg" title="Background"><input type="color" id="trayWeeklyText" title="Number"></span>
+                                    <span class="settings-row-label">Fable tray</span>
+                                    <span class="tray-color-pair"><input type="color" id="trayFableBg" title="Background"><input type="color" id="trayFableText" title="Number"></span>
+                                    <span class="settings-row-label" title="Rows from your local claude CLI login">CLI account</span>
+                                    <label class="toggle-switch"><input type="checkbox" id="showClaudeCodeToggle"><span class="toggle-slider"></span></label>
+                                </div>
+                                <div class="provider-col-login">
+                                    <span class="settings-row-hint" id="anthropicLoginStatus">Not connected</span>
+                                    <span class="settings-row-hint plain-storage-warning" id="plainStorageWarning" style="display:none;">⚠ No OS keychain available — stored logins sit unencrypted on this machine</span>
+                                    <button class="settings-connect-btn" id="logoutBtn" title="Sign in to Claude.ai">Log In</button>
+                                </div>
+                            </div>
+                            <div class="provider-col">
+                                <div class="provider-col-title pct-openai">OpenAI</div>
+                                <div class="provider-col-body">
+                                    <span class="settings-row-label">Codex tray</span>
+                                    <span class="tray-color-pair"><input type="color" id="trayOpenaiBg" title="Background"><input type="color" id="trayOpenaiText" title="Number"></span>
+                                    <span class="settings-row-label" title="Track the account you signed into I'm Burning! with">Desktop account</span>
+                                    <label class="toggle-switch"><input type="checkbox" id="showCodexToggle"><span class="toggle-slider"></span></label>
+                                    <span class="settings-row-label" title="Track your codex CLI's login when it is a different account">CLI account</span>
+                                    <label class="toggle-switch"><input type="checkbox" id="showCodexCliToggle"><span class="toggle-slider"></span></label>
+                                </div>
+                                <div class="provider-col-login">
+                                    <span class="settings-row-hint" id="openaiLoginStatus">Not connected</span>
+                                    <button class="settings-connect-btn" id="settingsConnectOpenaiBtn">Connect</button>
+                                    <button class="disconnect-btn" id="disconnectOpenaiBtn" style="display: none;">Disconnect</button>
+                                </div>
+                            </div>
+                            <div class="provider-col">
+                                <div class="provider-col-title pct-google">Google</div>
+                                <div class="provider-col-body">
+                                    <span class="settings-row-label">Gemini tray</span>
+                                    <span class="tray-color-pair"><input type="color" id="trayGoogleBg" title="Background"><input type="color" id="trayGoogleText" title="Number"></span>
+                                    <span class="settings-row-label" title="Track the account you signed into I'm Burning! with">Desktop account</span>
+                                    <label class="toggle-switch"><input type="checkbox" id="showGeminiToggle"><span class="toggle-slider"></span></label>
+                                    <span class="settings-row-label" title="Track your gemini CLI's login when it is a different account">CLI account</span>
+                                    <label class="toggle-switch"><input type="checkbox" id="showGeminiCliToggle"><span class="toggle-slider"></span></label>
+                                    <span class="settings-row-label" title="Which Google surface to meter. Antigravity is the only one that reports agent usage; Gemini reads the classic Code Assist quota.">Usage source</span>
+                                    <select id="googleSource" class="settings-select">
+                                        <option value="auto">Auto (Antigravity if present)</option>
+                                        <option value="antigravity">Antigravity only</option>
+                                        <option value="gemini">Gemini only</option>
+                                    </select>
+                                </div>
+                                <div class="provider-col-login">
+                                    <span class="settings-row-hint" id="googleLoginStatus">Not connected</span>
+                                    <button class="settings-connect-btn" id="settingsConnectGoogleBtn">Connect</button>
+                                    <button class="disconnect-btn" id="disconnectGoogleBtn" style="display: none;">Disconnect</button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div class="settings-footer">
+                        <span class="settings-version-label" id="settingsVersionLabel">v1.5.0</span>
+                        <span class="settings-update-link" id="settingsUpdateLink" style="display: none;"></span>
+                        <button class="github-btn" id="githubBtn">
+                            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+                            </svg>
+                            I'm Burning! on GitHub
+                        </button>
+                    </div>
+                    <div class="settings-credit">
+                        <span>Original "Claude Usage Widget" by <button class="credit-link" id="creditLink">Slavomir Durej</button></span>
+                        <button class="coffee-btn" id="coffeeBtn" title="Support I'm Burning! development">☕ Buy me a coffee</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Compact Settings Overlay (shown only in compact mode) -->
+            <div class="settings-overlay compact-settings-overlay" id="compactSettingsOverlay" style="display: none;">
+                <div class="settings-content">
+                    <div class="settings-header">
+                        <span class="settings-title">Settings</span>
+                        <button class="done-settings-btn" id="closeCompactSettingsBtn" title="Done">Done</button>
+                    </div>
+                    <div class="compact-settings-body">
+                        <div class="settings-col">
+                            <span class="settings-row-label">Compact mode</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="compactModeToggleCompact">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

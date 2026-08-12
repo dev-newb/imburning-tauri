@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "I'm Burning!",
+  "version": "0.1.0",
+  "identifier": "com.burnwatch.tauri",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "I'm Burning!",
+        "label": "main",
+        "width": 590,
+        "height": 155,
+        "minWidth": 290,
+        "minHeight": 180,
+        "decorations": false,
+        "transparent": false,
+        "backgroundColor": "#16161e",
+        "alwaysOnTop": true,
+        "resizable": true,
+        "maximizable": true,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data:; font-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "icon": ["icons/icon.icns", "icons/icon.png"],
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    }
+  }
+}
