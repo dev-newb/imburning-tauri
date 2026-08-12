@@ -1,7 +1,7 @@
 // OpenAI/Codex usage read from the Codex CLI's own login.
 
 use crate::providers::{local_credential_files, Limit, ProviderData};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 const USAGE: &str = "https://chatgpt.com/backend-api/wham/usage";
 const CHROME_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 \
@@ -123,17 +123,40 @@ fn normalize(json: &Value) -> Option<ProviderData> {
     if limits.is_empty() {
         return None;
     }
+    // Prepaid credits and banked resets each drive their own summary row in
+    // the renderer, so they are passed through rather than dropped.
+    let credits = json.get("credits").map(|c| {
+        json!({
+            "balance": c.get("balance").cloned().unwrap_or(Value::Null),
+            "hasCredits": c.get("has_credits").and_then(|v| v.as_bool()).unwrap_or(false),
+            "unlimited": c.get("unlimited").and_then(|v| v.as_bool()).unwrap_or(false),
+            "approxLocal": c.get("approx_local_messages").cloned().unwrap_or(Value::Null),
+            "approxCloud": c.get("approx_cloud_messages").cloned().unwrap_or(Value::Null),
+        })
+    });
+    // OpenAI's weekly-limit reset feature: banked resets that can be spent to
+    // clear a hit limit early (applicable = usable right now).
+    let reset_credits = json.get("rate_limit_reset_credits").map(|r| {
+        json!({
+            "available": r.get("available_count").and_then(|v| v.as_i64()).unwrap_or(0),
+            "applicable": r.get("applicable_available_count").and_then(|v| v.as_i64()).unwrap_or(0),
+        })
+    });
+
     Some(ProviderData {
         source: "live".into(),
         connected: false, // via CLI login
-        email: json
-            .get("email")
-            .or_else(|| json.get("account_id"))
-            .and_then(|v| v.as_str())
-            .map(String::from),
+        email: json.get("email").and_then(|v| v.as_str()).map(String::from),
         limits,
         foreign: vec![],
         cli: None,
+        credits,
+        reset_credits,
+        account_id: json
+            .get("account_id")
+            .or_else(|| json.get("user_id"))
+            .and_then(|v| v.as_str())
+            .map(String::from),
     })
 }
 

@@ -50,7 +50,7 @@
     closeWindow: () => invoke('close_window'),
     resizeWindow: (height) => invoke('resize_window', { height: Number(height) || 0 }),
     fitLandscapeWidth: (width) => invoke('fit_landscape_width', { width: Number(width) || 0 }),
-    setMinHeight: noop,
+    setMinHeight: (h) => invoke('set_min_height', { height: Number(h) || 180 }),
     getWindowPosition: () => invoke('get_window_position'),
     setWindowPosition: (position) => invoke('set_window_position', { position }),
 
@@ -91,14 +91,19 @@
     saveSettings: (settings) => invoke('save_settings', { settings }),
 
     // ---- alert sounds ----
+    // Both return the Electron reply SHAPE, not the raw value: the caller
+    // checks `res.ok` and reads `res.path` / `res.dataUrl`, so a bare string
+    // or null silently does nothing.
     pickSoundFile: async () => {
-      const path = await window.__TAURI__.dialog.open({
+      const picked = await window.__TAURI__.dialog.open({
         multiple: false,
-        filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'ogg', 'm4a', 'aiff'] }]
+        filters: [{ name: 'Audio', extensions: ['m4a', 'mp3', 'wav', 'aac', 'ogg', 'flac'] }]
       });
-      return path || null;
+      const path = Array.isArray(picked) ? picked[0] : picked;
+      if (!path) return { ok: false, canceled: true };
+      return { ok: true, path, name: String(path).split('/').pop() };
     },
-    readSoundFile: later(null),
+    readSoundFile: (path) => invoke('read_sound_file', { path: String(path || '') }),
 
     // ---- updates ----
     checkForUpdate: later({ available: false }),
@@ -116,7 +121,7 @@
     sendAlertWebhook: noop,
 
     // ---- layout ----
-    setCompactMode: noop,
+    setCompactMode: (compact) => invoke('set_compact_mode', { compact: compact === true }),
     settingsFit: (height) => invoke('resize_window', { height: Number(height) || 0 }),
     settingsRestore: noop,
     applyWindowPreset: noop,

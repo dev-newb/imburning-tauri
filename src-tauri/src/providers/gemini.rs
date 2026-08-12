@@ -261,5 +261,8 @@ pub async fn fetch(client: &reqwest::Client) -> Option<ProviderData> {
         limits,
         foreign: vec![],
         cli: None,
+        credits: None,
+        reset_credits: None,
+        account_id: None,
     })
 }

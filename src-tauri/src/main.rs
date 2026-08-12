@@ -9,6 +9,7 @@
 
 mod history;
 mod providers;
+mod settings;
 mod store;
 mod usage;
 
@@ -36,7 +37,7 @@ fn get_latest_usage(state: State<'_, std::sync::Arc<AppState>>) -> Value {
 
 #[tauri::command]
 fn get_settings(state: State<'_, std::sync::Arc<AppState>>) -> Value {
-    state.store.get_or("settings", json!({}))
+    settings::with_defaults(&state.store)
 }
 
 #[tauri::command]
@@ -124,14 +125,24 @@ fn resize_window(window: tauri::Window, height: f64) {
     if let Ok(size) = window.inner_size() {
         let scale = window.scale_factor().unwrap_or(1.0);
         let logical_width = size.width as f64 / scale;
-        let target = height.max(180.0);
+        let floor = MIN_HEIGHT.lock().map(|h| *h).unwrap_or(180.0);
+        let target = height.max(if COMPACT.load(std::sync::atomic::Ordering::Relaxed) { 90.0 } else { floor });
         dev_log(&format!(
             "resize_window requested={:.0} applied={:.0} width={:.0}",
             height, target, logical_width
         ));
+        // Record what WE asked for, so the resize listener can tell a
+        // programmatic fit from the user dragging the frame.
+        if let Ok(mut slot) = LAST_SET_HEIGHT.lock() {
+            *slot = target;
+        }
         let _ = window.set_size(tauri::LogicalSize::new(logical_width, target));
     }
 }
+
+/// The height the backend last set, used to distinguish a programmatic fit
+/// from a hand-resize. Electron tracked the same thing as `_lastSetHeight`.
+static LAST_SET_HEIGHT: std::sync::Mutex<f64> = std::sync::Mutex::new(0.0);
 
 #[tauri::command]
 fn fit_landscape_width(window: tauri::Window, width: f64) {
@@ -176,6 +187,70 @@ fn set_always_on_top(window: tauri::Window, flag: bool) {
     let _ = window.set_always_on_top(flag);
 }
 
+/// Compact mode needs a narrower window than the normal minimum allows, so the
+/// floor moves with the mode — otherwise the renderer asks for compact
+/// geometry and the OS clamps it back to the normal-mode minimum, leaving the
+/// widget stuck at a size its compact layout was never drawn for.
+#[tauri::command]
+fn set_compact_mode(window: tauri::Window, compact: bool) {
+    let (min_w, min_h, width) = if compact { (280.0, 90.0, 320.0) } else { (290.0, 180.0, 590.0) };
+    let _ = window.set_min_size(Some(tauri::LogicalSize::new(min_w, min_h)));
+    if let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) {
+        let _ = window.set_size(tauri::LogicalSize::new(width, size.height as f64 / scale));
+    }
+    COMPACT.store(compact, std::sync::atomic::Ordering::Relaxed);
+}
+
+static COMPACT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Minimum height the renderer asks for as its layout changes (landscape needs
+/// more). Kept so resize_window's floor tracks the live layout instead of a
+/// constant that is wrong half the time.
+static MIN_HEIGHT: std::sync::Mutex<f64> = std::sync::Mutex::new(180.0);
+
+#[tauri::command]
+fn set_min_height(window: tauri::Window, height: f64) {
+    let height = height.clamp(80.0, 2000.0);
+    if let Ok(mut slot) = MIN_HEIGHT.lock() {
+        *slot = height;
+    }
+    let _ = window.set_min_size(Some(tauri::LogicalSize::new(290.0, height)));
+}
+
+/// Custom alert sounds live outside the bundle. Hand the renderer the bytes as
+/// a data: URL rather than opening the CSP up to arbitrary file: reads — the
+/// same reasoning as the Electron build.
+#[tauri::command]
+fn read_sound_file(path: String) -> Value {
+    use base64::Engine;
+    if path.is_empty() {
+        return json!({ "ok": false, "error": "No file" });
+    }
+    let Ok(bytes) = std::fs::read(&path) else {
+        return json!({ "ok": false, "error": "Could not read file" });
+    };
+    // Refuse anything implausible for an alert sound rather than trying to
+    // inline tens of megabytes into a data: URL.
+    if bytes.len() > 25 * 1024 * 1024 {
+        return json!({ "ok": false, "error": "File too large" });
+    }
+    let mime = match std::path::Path::new(&path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase()
+        .as_str()
+    {
+        "mp3" => "audio/mpeg",
+        "m4a" | "aac" => "audio/mp4",
+        "ogg" => "audio/ogg",
+        "flac" => "audio/flac",
+        _ => "audio/wav",
+    };
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    json!({ "ok": true, "dataUrl": format!("data:{};base64,{}", mime, encoded) })
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -195,6 +270,41 @@ fn main() {
                     .expect("http client"),
             });
             app.manage(state.clone());
+
+            // The renderer applies its squeeze/responsive classes only when
+            // told the window is user-sized, so without this event the whole
+            // responsive layout is dead. Electron sent it from a debounced
+            // resize handler; same here, debounced so a drag does not emit a
+            // hundred times. "User-sized" means the window no longer matches
+            // the height the renderer last asked for.
+            if let Some(window) = app.get_webview_window("main") {
+                let emitter = window.clone();
+                let pending = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+                window.on_window_event(move |event| {
+                    if !matches!(event, tauri::WindowEvent::Resized(_)) {
+                        return;
+                    }
+                    let seq = pending.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                    let emitter = emitter.clone();
+                    let pending = pending.clone();
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+                        // A newer resize landed while waiting — let it emit.
+                        if pending.load(std::sync::atomic::Ordering::Relaxed) != seq {
+                            return;
+                        }
+                        let user_sized = match (emitter.inner_size(), emitter.scale_factor()) {
+                            (Ok(size), Ok(scale)) => {
+                                let logical = size.height as f64 / scale;
+                                let expected = LAST_SET_HEIGHT.lock().map(|h| *h).unwrap_or(0.0);
+                                expected > 0.0 && (logical - expected).abs() > 4.0
+                            }
+                            _ => false,
+                        };
+                        let _ = emitter.emit("window-user-sized", user_sized);
+                    });
+                });
+            }
 
             // Poll on the interval the user chose, and tell the renderer to
             // repaint — the same cadence the Electron build's main process ran.
@@ -230,6 +340,9 @@ fn main() {
             get_window_position,
             set_window_position,
             set_always_on_top,
+            set_compact_mode,
+            set_min_height,
+            read_sound_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running I'm Burning!");

@@ -4,6 +4,7 @@ pub mod codex;
 pub mod gemini;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// One metered pool, shaped exactly like the object the renderer already
 /// consumes — the frontend is unchanged from the Electron build, so these
@@ -38,6 +39,15 @@ pub struct ProviderData {
     /// from the one the widget itself is signed into.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cli: Option<Box<ProviderData>>,
+    /// Codex prepaid credits. The renderer draws its own summary row from
+    /// this, so dropping it silently removes a row the Electron build shows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub credits: Option<Value>,
+    /// Banked weekly-limit resets, likewise its own row.
+    #[serde(rename = "resetCredits", skip_serializing_if = "Option::is_none")]
+    pub reset_credits: Option<Value>,
+    #[serde(rename = "accountId", skip_serializing_if = "Option::is_none")]
+    pub account_id: Option<String>,
 }
 
 impl ProviderData {
@@ -49,6 +59,9 @@ impl ProviderData {
             limits: vec![],
             foreign: vec![],
             cli: None,
+            credits: None,
+            reset_credits: None,
+            account_id: None,
         }
     }
 }

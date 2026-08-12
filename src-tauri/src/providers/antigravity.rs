@@ -301,10 +301,68 @@ pub fn normalize(json: &Value) -> Option<ProviderData> {
         limits,
         foreign,
         cli: None,
+        credits: None,
+        reset_credits: None,
+        account_id: None,
     })
 }
 
-pub async fn fetch(client: &reqwest::Client) -> Option<ProviderData> {
+/// Never poll faster than this. The normal cadence is the 5-minute provider
+/// cache; this only stops repeated manual refreshes from hammering a private
+/// endpoint.
+const MIN_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+/// How long a persisted last-good result stays trustworthy.
+const LAST_GOOD_MAX: i64 = 24 * 60 * 60 * 1000;
+
+static LAST_ATTEMPT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+fn last_good(store: &crate::store::Store) -> Option<ProviderData> {
+    let saved = store.get("antigravityLastGood")?;
+    let at = saved.get("at")?.as_i64()?;
+    if chrono::Utc::now().timestamp_millis() - at > LAST_GOOD_MAX {
+        return None;
+    }
+    serde_json::from_value(saved.get("data")?.clone()).ok()
+}
+
+/// Fetch, falling back to the last good result rather than blanking the
+/// section. The endpoint is private and occasionally refuses a request that
+/// would succeed a minute later; showing yesterday's figure beats showing the
+/// user an empty Google section every time that happens.
+pub async fn fetch(client: &reqwest::Client, store: &crate::store::Store) -> Option<ProviderData> {
+    let saved = last_good(store);
+
+    // Inside the floor, serve last-good without touching the network.
+    let recent = LAST_ATTEMPT
+        .lock()
+        .ok()
+        .and_then(|slot| *slot)
+        .map(|at| at.elapsed() < MIN_INTERVAL)
+        .unwrap_or(false);
+    if recent {
+        if let Some(saved) = saved {
+            return Some(saved);
+        }
+    }
+    if let Ok(mut slot) = LAST_ATTEMPT.lock() {
+        *slot = Some(std::time::Instant::now());
+    }
+
+    match fetch_live(client).await {
+        Some(fresh) => {
+            if let Ok(value) = serde_json::to_value(&fresh) {
+                store.set(
+                    "antigravityLastGood",
+                    serde_json::json!({ "at": chrono::Utc::now().timestamp_millis(), "data": value }),
+                );
+            }
+            Some(fresh)
+        }
+        None => saved,
+    }
+}
+
+async fn fetch_live(client: &reqwest::Client) -> Option<ProviderData> {
     let token = read_keychain_token()?;
     let now = chrono::Utc::now().timestamp_millis();
     let mut access = match &token.access {

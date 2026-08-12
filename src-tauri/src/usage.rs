@@ -52,7 +52,7 @@ async fn google(client: &reqwest::Client, store: &Store) -> Option<ProviderData>
         .to_string();
     let want_antigravity = source == "antigravity" || (source == "auto" && antigravity::available());
     if want_antigravity {
-        if let Some(mut data) = antigravity::fetch(client).await {
+        if let Some(mut data) = antigravity::fetch(client, store).await {
             // The Claude/GPT-OSS pools Antigravity meters are real usage on the
             // same login, so they belong in the section — but they ship hidden,
             // because under a Google heading they surprise anyone who has never
