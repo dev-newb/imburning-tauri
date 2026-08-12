@@ -48,9 +48,7 @@ Not yet ported:
   machine whose Anthropic usage comes from a claude.ai web login rather than
   `~/.claude/.credentials.json`, the Anthropic section stays empty.
 * The detachable graph window, history export, the tray icon, the self-updater.
-* **Auto-height.** The window opens taller than its content; the renderer's
-  measure-and-resize loop needs the Electron `setMinHeight` / preset behaviour that is
-  currently a no-op in the shim.
+* Window presets (wide/tall) and `settingsRestore`, which still no-op.
 
 Everything unported is stubbed to resolve to a benign value rather than throw, so a
 missing feature leaves the widget running instead of blanking it.
