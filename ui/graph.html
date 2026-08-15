@@ -9,7 +9,7 @@
         style-src 'self' 'unsafe-inline';
         font-src 'self';
         img-src 'self' data:;
-        connect-src 'none';
+        connect-src ipc: http://ipc.localhost;
     ">
     <title>I'm Burning! — Graph</title>
     <style>
@@ -96,6 +96,7 @@
         </button>
     </div>
     <script src="chart.umd.js"></script>
+    <script src="tauri-shim.js"></script>
     <script src="chart-utils.js"></script>
     <script src="graph.js"></script>
 </body>

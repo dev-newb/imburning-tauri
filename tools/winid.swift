@@ -20,12 +20,20 @@
 import CoreGraphics
 import Foundation
 
-let filter = CommandLine.arguments.count > 1 ? CommandLine.arguments[1].lowercased() : nil
+let flags = ["--list", "--all"]
+let positional = CommandLine.arguments.dropFirst().filter { !flags.contains($0) }
+let filter = positional.first?.lowercased()
 let verbose = CommandLine.arguments.contains("--list")
+// macOS only renders the active Space, so onScreenOnly cannot see a window
+// sitting on another desktop or behind a full-screen app. --all finds it
+// anyway; a capture of it may come back blank, but at least its existence and
+// geometry are answerable.
+let includeOffSpace = CommandLine.arguments.contains("--all")
 
 guard
     let windows = CGWindowListCopyWindowInfo(
-        [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID
+        includeOffSpace ? [.excludeDesktopElements] : [.optionOnScreenOnly, .excludeDesktopElements],
+        kCGNullWindowID
     ) as? [[String: Any]]
 else {
     FileHandle.standardError.write(Data("cannot read the window list\n".utf8))

@@ -79,7 +79,7 @@
     },
     getLatestUsage: () => invoke('get_latest_usage'),
     getUsageHistory: () => invoke('get_usage_history'),
-    exportHistory: later(null),
+    exportHistory: (format) => invoke('export_history', { format: String(format || 'csv') }),
 
     openExternal: (url) => {
       if (!isAllowedExternalUrl(url)) {
@@ -137,17 +137,23 @@
     settingsRestore: noop,
     applyWindowPreset: (preset) => invoke('apply_window_preset', { preset: String(preset || '') }),
 
-    // ---- detachable graph window (not yet ported) ----
-    openGraphWindow: noop,
-    closeGraphWindow: noop,
-    isGraphWindowOpen: later(false),
-    graphSetAlwaysOnTop: (flag) => invoke('set_always_on_top', { flag: flag === true }),
-    graphGetAlwaysOnTop: later(true),
+    // ---- detachable graph window ----
+    openGraphWindow: () => invoke('open_graph_window'),
+    closeGraphWindow: () => invoke('close_graph_window'),
+    isGraphWindowOpen: () => invoke('is_graph_window_open'),
+    graphSetAlwaysOnTop: (flag) => invoke('graph_set_always_on_top', { flag: flag === true }),
+    graphGetAlwaysOnTop: () => invoke('graph_get_always_on_top'),
 
     // ---- OAuth connect flows (not yet ported) ----
     oauthConnect: later({ success: false, reason: 'unsupported' }),
     oauthDisconnect: later({ success: false })
   };
+
+  // Everything below is main-window behaviour. graph.html loads this shim too
+  // (it needs electronAPI for getLatestUsage), but it has no widgetContainer,
+  // no auto-height loop, and reporting its DOM would just confuse the build
+  // verification.
+  if (!document.getElementById('widgetContainer')) return;
 
   // Post-load settle passes. The renderer only re-measures its height when
   // something changes the content, and Electron's main process happened to

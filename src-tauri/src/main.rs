@@ -364,6 +364,190 @@ async fn post_webhook(state: &std::sync::Arc<AppState>, event: &str, title: &str
     let _ = request.send().await; // best effort: an alert must never block the UI
 }
 
+// ---- detachable graph window ----------------------------------------------
+
+/// The chart in its own window, so it can sit beside the widget instead of
+/// inside it. Bounds persist; "always on top" is its own setting, separate
+/// from the main window's.
+#[tauri::command]
+fn open_graph_window(app: tauri::AppHandle, state: State<'_, std::sync::Arc<AppState>>) {
+    if let Some(existing) = app.get_webview_window("graph") {
+        let _ = existing.show();
+        let _ = existing.set_focus();
+        return;
+    }
+    let saved = state.store.get_or("graphWindowBounds", json!({}));
+    let num = |k: &str, d: f64| saved.get(k).and_then(|v| v.as_f64()).unwrap_or(d);
+    let on_top = state
+        .store
+        .get_or("settings.graphAlwaysOnTop", json!(true))
+        .as_bool()
+        .unwrap_or(true);
+
+    let mut builder = tauri::WebviewWindowBuilder::new(
+        &app,
+        "graph",
+        tauri::WebviewUrl::App("graph.html".into()),
+    )
+    .title("I'm Burning! — Graph")
+    .inner_size(num("width", 660.0), num("height", 400.0))
+    .min_inner_size(360.0, 240.0)
+    .background_color(tauri::window::Color(0x16, 0x16, 0x1e, 0xff))
+    .always_on_top(on_top);
+    if saved.get("x").is_some() && saved.get("y").is_some() {
+        builder = builder.position(num("x", 0.0), num("y", 0.0));
+    }
+    let _ = builder.build();
+}
+
+#[tauri::command]
+fn close_graph_window(app: tauri::AppHandle, state: State<'_, std::sync::Arc<AppState>>) {
+    if let Some(window) = app.get_webview_window("graph") {
+        // Remember where the user left it before it goes.
+        if let (Ok(pos), Ok(size), Ok(scale)) =
+            (window.outer_position(), window.inner_size(), window.scale_factor())
+        {
+            state.store.set(
+                "graphWindowBounds",
+                json!({
+                    "x": pos.x as f64 / scale,
+                    "y": pos.y as f64 / scale,
+                    "width": size.width as f64 / scale,
+                    "height": size.height as f64 / scale
+                }),
+            );
+        }
+        let _ = window.close();
+        let _ = app.emit("graph-window-closed", ());
+    }
+}
+
+#[tauri::command]
+fn is_graph_window_open(app: tauri::AppHandle) -> bool {
+    app.get_webview_window("graph").is_some()
+}
+
+#[tauri::command]
+fn graph_set_always_on_top(app: tauri::AppHandle, state: State<'_, std::sync::Arc<AppState>>, flag: bool) {
+    state.store.set("settings.graphAlwaysOnTop", json!(flag));
+    if let Some(window) = app.get_webview_window("graph") {
+        let _ = window.set_always_on_top(flag);
+    }
+}
+
+#[tauri::command]
+fn graph_get_always_on_top(state: State<'_, std::sync::Arc<AppState>>) -> bool {
+    state
+        .store
+        .get_or("settings.graphAlwaysOnTop", json!(true))
+        .as_bool()
+        .unwrap_or(true)
+}
+
+// ---- history export --------------------------------------------------------
+
+/// CSV columns are the UNION of keys across every record, because the shape
+/// grows over time — a pool the account gained last week exists on later rows
+/// only, and keying off the first row would silently drop it.
+fn history_to_csv(history: &[Value]) -> String {
+    let mut rows: Vec<serde_json::Map<String, Value>> = vec![];
+    for entry in history {
+        let Some(obj) = entry.as_object() else { continue };
+        let mut row = serde_json::Map::new();
+        for (k, v) in obj {
+            if k == "scoped" {
+                if let Some(scoped) = v.as_object() {
+                    for (sk, sv) in scoped {
+                        row.insert(format!("scoped_{}", sk), sv.clone());
+                    }
+                }
+            } else {
+                row.insert(k.clone(), v.clone());
+            }
+        }
+        if let Some(ts) = obj.get("timestamp").and_then(|t| t.as_i64()) {
+            if let Some(d) = chrono::DateTime::from_timestamp_millis(ts) {
+                row.insert("timestamp_iso".into(), json!(d.to_rfc3339()));
+            }
+        }
+        rows.push(row);
+    }
+    let mut cols: Vec<String> = vec![];
+    for row in &rows {
+        for k in row.keys() {
+            if !cols.contains(k) {
+                cols.push(k.clone());
+            }
+        }
+    }
+    let esc = |v: &Value| -> String {
+        let s = match v {
+            Value::Null => String::new(),
+            Value::String(s) => s.clone(),
+            other => other.to_string(),
+        };
+        if s.contains([',', '"', '\n']) {
+            format!("\"{}\"", s.replace('"', "\"\""))
+        } else {
+            s
+        }
+    };
+    let mut out = vec![cols.join(",")];
+    for row in &rows {
+        out.push(
+            cols.iter()
+                .map(|c| esc(row.get(c).unwrap_or(&Value::Null)))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+    }
+    out.join("\n")
+}
+
+#[tauri::command]
+async fn export_history(app: tauri::AppHandle, format: String) -> Value {
+    use tauri_plugin_dialog::DialogExt;
+    let history = history::read();
+    if history.is_empty() {
+        return json!({ "ok": false, "error": "No usage history recorded yet." });
+    }
+    let stamp = history
+        .last()
+        .and_then(|e| e.get("timestamp"))
+        .and_then(|t| t.as_i64())
+        .and_then(chrono::DateTime::from_timestamp_millis)
+        .map(|d| d.with_timezone(&chrono::Local).format("%Y-%m-%d").to_string())
+        .unwrap_or_else(|| "export".into());
+    let json_format = format == "json";
+    let ext = if json_format { "json" } else { "csv" };
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.dialog()
+        .file()
+        .set_title("Export I'm Burning! usage history")
+        .set_file_name(&format!("burnwatch-usage-{}.{}", stamp, ext))
+        .add_filter(if json_format { "JSON" } else { "CSV" }, &[ext])
+        .save_file(move |path| {
+            let _ = tx.send(path);
+        });
+    let Ok(Some(path)) = rx.recv() else {
+        return json!({ "ok": false, "canceled": true });
+    };
+    let Some(path) = path.into_path().ok() else {
+        return json!({ "ok": false, "error": "Unusable path" });
+    };
+
+    let body = if json_format {
+        serde_json::to_string_pretty(&history).unwrap_or_default()
+    } else {
+        history_to_csv(&history)
+    };
+    match std::fs::write(&path, body) {
+        Ok(_) => json!({ "ok": true, "path": path.to_string_lossy(), "count": history.len() }),
+        Err(e) => json!({ "ok": false, "error": e.to_string() }),
+    }
+}
+
 /// Custom alert sounds live outside the bundle. Hand the renderer the bytes as
 /// a data: URL rather than opening the CSP up to arbitrary file: reads — the
 /// same reasoning as the Electron build.
@@ -404,6 +588,16 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // Verification runs must never take focus from the user. As an
+            // Accessory app the process cannot become active, so neither the
+            // main window nor the graph window can steal the front — which is
+            // the whole point of the headless capture path. Opt-in via env so
+            // the real app still behaves like a normal app.
+            #[cfg(target_os = "macos")]
+            if std::env::var("IMBURNING_NO_FOCUS").as_deref() == Ok("1") {
+                let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            }
+
             // Held as an Arc, not just managed state: the refresh loop below
             // needs to keep it across an await, and a borrowed State<'_, _>
             // is not Send.
@@ -506,6 +700,12 @@ fn main() {
             read_sound_file,
             apply_window_preset,
             send_alert_webhook,
+            open_graph_window,
+            close_graph_window,
+            is_graph_window_open,
+            graph_set_always_on_top,
+            graph_get_always_on_top,
+            export_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running I'm Burning!");

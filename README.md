@@ -79,7 +79,18 @@ swiftc -O tools/winid.swift -o tools/winid
 screencapture -x -o -l$(tools/winid imburning) shot.png
 ```
 
-Verified with Finder frontmost: the capture succeeded and focus never moved.
-Pair it with `IMBURNING_DEV_REPORT=1`, which makes the shim report the rendered
-DOM to `$TMPDIR/imburning-dev-report.txt`, and both builds can be verified
-while you keep working.
+Two more pieces make verification genuinely non-disruptive:
+
+* **`IMBURNING_NO_FOCUS=1`** runs the app under the Accessory activation
+  policy, so the process cannot become active and launching it cannot take
+  the front. Verified: frontmost app unchanged across a launch.
+* **`IMBURNING_DEV_REPORT=1`** makes the shim report the rendered DOM to
+  `$TMPDIR/imburning-dev-report.txt`. This needs no rendering at all, so it
+  works while the window is on another Space or behind a full-screen app —
+  which is where pixel capture stops working.
+
+That last point is a real limit worth knowing: macOS only renders the active
+Space, so `screencapture` of a window on another desktop returns nothing.
+`tools/winid <app> --all` will still find the window and report its geometry.
+Use the DOM report for logic, and pixels only when the window is on the
+current Space.
