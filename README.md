@@ -61,3 +61,25 @@ cd src-tauri && cargo build --release
 
 Requires a Rust toolchain (`brew install rustup && rustup default stable`) and Xcode
 command line tools.
+
+## Testing without stealing focus
+
+The Electron build can be driven headlessly over CDP
+(`--remote-debugging-port=9222`), which screenshots and scripts the window
+without focusing it. WKWebView has no equivalent port, and `screencapture
+-R<rect>` grabs a screen *region* — so it captures whatever is on top and
+forces you to raise the app first.
+
+`tools/winid.swift` closes that gap. It prints CoreGraphics window ids, and
+`screencapture -l<id>` captures that specific window even while it is
+unfocused or fully occluded:
+
+```bash
+swiftc -O tools/winid.swift -o tools/winid
+screencapture -x -o -l$(tools/winid imburning) shot.png
+```
+
+Verified with Finder frontmost: the capture succeeded and focus never moved.
+Pair it with `IMBURNING_DEV_REPORT=1`, which makes the shim report the rendered
+DOM to `$TMPDIR/imburning-dev-report.txt`, and both builds can be verified
+while you keep working.
