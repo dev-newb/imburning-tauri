@@ -152,7 +152,21 @@
   // (it needs electronAPI for getLatestUsage), but it has no widgetContainer,
   // no auto-height loop, and reporting its DOM would just confuse the build
   // verification.
-  if (!document.getElementById('widgetContainer')) return;
+  //
+  // The check has to wait for the DOM: this file is loaded from <head>, so at
+  // execution time the body does not exist yet and every window looks like the
+  // graph window — which silently disabled the auto-fit and the dev report.
+  const whenReady = (fn) =>
+    document.readyState === 'loading'
+      ? document.addEventListener('DOMContentLoaded', fn, { once: true })
+      : fn();
+
+  whenReady(() => {
+    if (!document.getElementById('widgetContainer')) return;
+    mainWindowBehaviour();
+  });
+
+  function mainWindowBehaviour() {
 
   // Post-load settle passes. The renderer only re-measures its height when
   // something changes the content, and Electron's main process happened to
@@ -231,4 +245,5 @@
       console.warn('startDragging failed:', err);
     }
   });
+  }
 })();
