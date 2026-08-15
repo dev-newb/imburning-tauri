@@ -3,6 +3,7 @@
 
 use crate::providers::{antigravity, claude_code, codex, gemini, ProviderData};
 use crate::store::Store;
+use tauri::Emitter;
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};
 
@@ -62,7 +63,15 @@ async fn google(client: &reqwest::Client, store: &Store) -> Option<ProviderData>
     gemini::fetch(client).await
 }
 
-pub async fn fetch_all(client: &reqwest::Client, store: &Store, cache: &Cache, force: bool) -> Value {
+/// `app` is optional so the fetch can run before the UI exists; without it the
+/// claude.ai path is skipped, since that traffic has to go through a webview.
+pub async fn fetch_all(
+    client: &reqwest::Client,
+    store: &Store,
+    cache: &Cache,
+    force: bool,
+    app: Option<&tauri::AppHandle>,
+) -> Value {
     if !force {
         if let Some(cached) = cache.get("usage") {
             return cached;
@@ -89,7 +98,38 @@ pub async fn fetch_all(client: &reqwest::Client, store: &Store, cache: &Cache, f
         "claude_code_same_account": false,
     });
 
-    if let Some(cc) = anthropic {
+    // claude.ai (the widget's own login) takes precedence over the CLI
+    // fallback, exactly as in Electron: it is the richer source, carrying
+    // extra-usage and the scoped weekly pools.
+    let mut web_usage: Option<Value> = None;
+    if let (Some(app), Some(org)) = (
+        app,
+        store.get("organizationId").and_then(|v| v.as_str().map(String::from)),
+    ) {
+        if crate::anthropic::read_session_key().is_some() {
+            match crate::anthropic::fetch_usage(app, &org).await {
+                Ok(v) => web_usage = Some(v),
+                Err(e) => {
+                    // An explicit auth failure means the session died; drop it so
+                    // the UI offers a re-login instead of showing stale numbers.
+                    if e.starts_with("AuthFailure") {
+                        crate::anthropic::delete_session_key();
+                        let _ = app.emit("session-expired", ());
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(web) = web_usage {
+        for key in ["five_hour", "seven_day", "limits", "extra_usage"] {
+            if let Some(v) = web.get(key) {
+                data[key] = v.clone();
+            }
+        }
+        data["anthropic_source"] = json!("web");
+        data["claude_code_same_account"] = json!(true);
+    } else if let Some(cc) = anthropic {
         data["five_hour"] = cc.get("five_hour").cloned().unwrap_or(Value::Null);
         data["seven_day"] = cc.get("seven_day").cloned().unwrap_or(Value::Null);
         data["limits"] = cc.get("limits").cloned().unwrap_or(json!([]));

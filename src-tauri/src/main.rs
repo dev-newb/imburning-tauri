@@ -8,6 +8,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod analytics;
+mod anthropic;
 mod history;
 mod providers;
 mod settings;
@@ -33,7 +34,7 @@ async fn fetch_usage_data(
     force: Option<bool>,
 ) -> Result<Value, String> {
     let force = force.unwrap_or(false);
-    let data = usage::fetch_all(&state.http, &state.store, &state.cache, force).await;
+    let data = usage::fetch_all(&state.http, &state.store, &state.cache, force, Some(&app)).await;
     tray::sync(&app, &data, &state.store);
     emit_burn_alerts(&app, &state).await;
     Ok(data)
@@ -71,6 +72,38 @@ fn save_settings(window: tauri::Window, state: State<'_, std::sync::Arc<AppState
     settings
 }
 
+#[tauri::command]
+async fn anthropic_login(app: tauri::AppHandle, state: State<'_, std::sync::Arc<AppState>>) -> Result<Value, String> {
+    let result = anthropic::login(&app).await;
+    // Remember the chosen org: every later usage call is scoped to it.
+    if result.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+        if let Some(id) = result.get("organizationId").and_then(|v| v.as_str()) {
+            state.store.set("organizationId", json!(id));
+        }
+        if let Some(orgs) = result.get("organizations") {
+            state.store.set("organizations", orgs.clone());
+        }
+        state.cache.clear(); // pick the new login up on the next tick
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+fn delete_credentials(state: State<'_, std::sync::Arc<AppState>>) -> Value {
+    anthropic::delete_session_key();
+    state.store.set("organizationId", Value::Null);
+    state.store.set("organizations", json!([]));
+    state.cache.clear();
+    json!({ "success": true })
+}
+
+#[tauri::command]
+fn set_organization(state: State<'_, std::sync::Arc<AppState>>, org_id: String) -> Value {
+    state.store.set("organizationId", json!(org_id));
+    state.cache.clear();
+    json!({ "success": true })
+}
+
 /// Login STATE only — never a token. The field names are the renderer's
 /// contract (`hasUsableCredentials` gates the whole UI on
 /// cliFallbackAvailable / providerFallbackAvailable), so they match the
@@ -78,13 +111,12 @@ fn save_settings(window: tauri::Window, state: State<'_, std::sync::Arc<AppState
 #[tauri::command]
 fn get_credentials(state: State<'_, std::sync::Arc<AppState>>) -> Value {
     let claude_cli = providers::claude_code::available();
+    let logged_in = anthropic::read_session_key().is_some();
     let external = providers::codex::available()
         || providers::gemini::has_credentials()
         || providers::antigravity::available();
     json!({
-        // This build has no widget-owned claude.ai login yet: everything runs
-        // off local CLI logins, which is the "via CLI login" path.
-        "loggedIn": false,
+        "loggedIn": logged_in,
         "organizationId": state.store.get_or("organizationId", Value::Null),
         "organizations": state.store.get_or("organizations", json!([])),
         "cliFallbackAvailable": claude_cli,
@@ -659,6 +691,40 @@ fn main() {
                 });
             }
 
+            // Dev probe: exercise the Cloudflare-passing fetch path without a
+            // login window. A 401 here is a PASS — it proves the webview
+            // reached the real API and got a real status, rather than a
+            // challenge page or a timeout.
+            // Its own flag: this reaches out to claude.ai twice, which should
+            // not happen on every ordinary dev launch.
+            if std::env::var("IMBURNING_PROBE").as_deref() == Ok("1") {
+                let probe = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(6)).await;
+                    // An unauthenticated endpoint first: it distinguishes "we
+                    // passed Cloudflare and the API answered" from "Cloudflare
+                    // answered instead", which a bare 403 cannot.
+                    let anon =
+                        anthropic::fetch_via_webview(&probe, "https://claude.ai/robots.txt").await;
+                    dev_log(&format!(
+                        "claude probe (anon): {}",
+                        match &anon {
+                            Ok(v) => format!("OK {}", v),
+                            Err(e) => e.clone(),
+                        }
+                    ));
+                    let result =
+                        anthropic::fetch_via_webview(&probe, "https://claude.ai/api/organizations").await;
+                    dev_log(&format!(
+                        "claude probe (api): {}",
+                        match &result {
+                            Ok(v) => format!("OK {} bytes", v.to_string().len()),
+                            Err(e) => e.clone(),
+                        }
+                    ));
+                });
+            }
+
             // Poll on the interval the user chose, and tell the renderer to
             // repaint — the same cadence the Electron build's main process ran.
             let handle = app.handle().clone();
@@ -671,7 +737,7 @@ fn main() {
                         .unwrap_or(5)
                         .clamp(1, 60);
                     tokio::time::sleep(std::time::Duration::from_secs(minutes * 60)).await;
-                    let data = usage::fetch_all(&state.http, &state.store, &state.cache, true).await;
+                    let data = usage::fetch_all(&state.http, &state.store, &state.cache, true, Some(&handle)).await;
                     tray::sync(&handle, &data, &state.store);
                     emit_burn_alerts(&handle, &state).await;
                     let _ = handle.emit("usage-updated", ());
@@ -685,6 +751,9 @@ fn main() {
             get_settings,
             save_settings,
             get_credentials,
+            anthropic_login,
+            delete_credentials,
+            set_organization,
             get_usage_history,
             get_app_version,
             dev_report,

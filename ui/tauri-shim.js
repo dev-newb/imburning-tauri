@@ -40,10 +40,9 @@
   window.electronAPI = {
     // ---- credentials (state only, never a token) ----
     getCredentials: () => invoke('get_credentials'),
-    anthropicLogin: later({ success: false, reason: 'unsupported' }),
-    setOrganization: (orgId) =>
-      invoke('save_settings', { settings: { ...(window._cachedSettings || {}), organizationId: String(orgId || '') } }),
-    deleteCredentials: later({ success: false }),
+    anthropicLogin: () => invoke('anthropic_login'),
+    setOrganization: (orgId) => invoke('set_organization', { orgId: String(orgId || '') }),
+    deleteCredentials: () => invoke('delete_credentials'),
 
     // ---- window controls ----
     minimizeWindow: () => invoke('minimize_window'),
