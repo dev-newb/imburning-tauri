@@ -12,6 +12,7 @@ mod history;
 mod providers;
 mod settings;
 mod store;
+mod tray;
 mod usage;
 
 use serde_json::{json, Value};
@@ -33,6 +34,7 @@ async fn fetch_usage_data(
 ) -> Result<Value, String> {
     let force = force.unwrap_or(false);
     let data = usage::fetch_all(&state.http, &state.store, &state.cache, force).await;
+    tray::sync(&app, &data, &state.store);
     emit_burn_alerts(&app, &state).await;
     Ok(data)
 }
@@ -475,7 +477,8 @@ fn main() {
                         .unwrap_or(5)
                         .clamp(1, 60);
                     tokio::time::sleep(std::time::Duration::from_secs(minutes * 60)).await;
-                    let _ = usage::fetch_all(&state.http, &state.store, &state.cache, true).await;
+                    let data = usage::fetch_all(&state.http, &state.store, &state.cache, true).await;
+                    tray::sync(&handle, &data, &state.store);
                     emit_burn_alerts(&handle, &state).await;
                     let _ = handle.emit("usage-updated", ());
                 }
