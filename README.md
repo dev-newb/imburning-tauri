@@ -22,9 +22,11 @@ The only addition is `ui/tauri-shim.js`, which defines `window.electronAPI` in t
 Tauri's `invoke()`. `app.js` cannot tell which runtime it is running on. Keeping the
 renderer byte-identical means a fix in either repo can be copied across without a merge.
 
-Both builds also read and write **the same** `config.json`
-(`~/Library/Application Support/claude-usage-widget/` on macOS), so settings, hidden
-rows and usage history carry over — run either build against one set of state.
+Each build keeps its **own** `config.json` (`imburning-tauri/` here,
+`claude-usage-widget/` there), and this one copies the Electron settings and history in
+on first run. Sharing one file was the first instinct and is wrong: both apps hold the
+whole document in memory and rewrite it wholesale, so running them together lets one
+silently discard the other's settings.
 
 ## Two things the shim has to reproduce by hand
 
@@ -37,21 +39,21 @@ rows and usage history carry over — run either build against one set of state.
 
 ## Status
 
-Verified working against live accounts on macOS: the full UI renders, Antigravity usage
-(with the "via Antigravity" chip and the default-hidden non-Gemini pool behind its
-"1 hidden" chip), Codex CLI usage — matching the Electron build row for row — the
-settings store, window controls and dragging, notifications, and the refresh loop.
+Verified against live accounts on macOS:
 
-Not yet ported:
+* usage for Antigravity, Gemini Code Assist, Codex and Claude Code
+* claude.ai sign-in, and its API traffic through a webview (Cloudflare blocks plain
+  HTTP clients — see `src/anthropic.rs`)
+* OpenAI and Google sign-in over PKCE with a loopback redirect
+* forecasts, the planner, frozen-provider detection and burn-spike alerts — the OpenAI
+  and Google planner lines match the Electron build to the digit
+* menu-bar badges, the detachable graph window, history export (CSV/JSON)
+* settings, window controls, dragging, presets, compact mode, notifications, webhooks,
+  alert sounds, and the chart over seeded history
 
-* **The widget's own OAuth logins.** This build reads local CLI logins only. On a
-  machine whose Anthropic usage comes from a claude.ai web login rather than
-  `~/.claude/.credentials.json`, the Anthropic section stays empty.
-* The detachable graph window, history export, the tray icon, the self-updater.
-* Window presets (wide/tall) and `settingsRestore`, which still no-op.
-
-Everything unported is stubbed to resolve to a benign value rather than throw, so a
-missing feature leaves the widget running instead of blanking it.
+Not ported: the **self-updater**. Tauri's updater wants a signing key and a release
+feed, which is release infrastructure rather than code, so it is a deliberate decision
+rather than an oversight. `settingsRestore` is also still a no-op.
 
 ## Build
 
