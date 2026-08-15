@@ -84,13 +84,15 @@ Two more pieces make verification genuinely non-disruptive:
 * **`IMBURNING_NO_FOCUS=1`** runs the app under the Accessory activation
   policy, so the process cannot become active and launching it cannot take
   the front. Verified: frontmost app unchanged across a launch.
-* **`IMBURNING_DEV_REPORT=1`** makes the shim report the rendered DOM to
-  `$TMPDIR/imburning-dev-report.txt`. This needs no rendering at all, so it
-  works while the window is on another Space or behind a full-screen app —
-  which is where pixel capture stops working.
+* **`IMBURNING_DEV_REPORT=1`** dumps the rendered DOM to
+  `$TMPDIR/imburning-dev-report.txt`. The snapshot is PULLED from the Rust
+  side, not pushed by the page on a timer — that distinction matters, see
+  below.
 
-That last point is a real limit worth knowing: macOS only renders the active
-Space, so `screencapture` of a window on another desktop returns nothing.
-`tools/winid <app> --all` will still find the window and report its geometry.
-Use the DOM report for logic, and pixels only when the window is on the
-current Space.
+macOS renders only the active Space, and that has two consequences. Pixel
+capture of a window on another desktop returns nothing (`tools/winid <app>
+--all` still finds it and reports geometry). And WebKit throttles the timers of
+an unrendered window to a standstill, so anything the page schedules for itself
+— including the auto-fit passes — simply stops. A page-driven report never
+arrives and looks exactly like a broken frontend; a host-initiated
+`eval_with_callback` still runs. Hence the pull.

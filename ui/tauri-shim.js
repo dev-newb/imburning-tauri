@@ -143,9 +143,9 @@
     graphSetAlwaysOnTop: (flag) => invoke('graph_set_always_on_top', { flag: flag === true }),
     graphGetAlwaysOnTop: () => invoke('graph_get_always_on_top'),
 
-    // ---- OAuth connect flows (not yet ported) ----
-    oauthConnect: later({ success: false, reason: 'unsupported' }),
-    oauthDisconnect: later({ success: false })
+    // ---- OAuth connect flows ----
+    oauthConnect: (provider) => invoke('oauth_connect', { provider: String(provider || '') }),
+    oauthDisconnect: (provider) => invoke('oauth_disconnect', { provider: String(provider || '') })
   };
 
   // Everything below is main-window behaviour. graph.html loads this shim too

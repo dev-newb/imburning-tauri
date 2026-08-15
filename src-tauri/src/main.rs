@@ -10,6 +10,7 @@
 mod analytics;
 mod anthropic;
 mod history;
+mod oauth;
 mod providers;
 mod settings;
 mod store;
@@ -104,6 +105,26 @@ fn set_organization(state: State<'_, std::sync::Arc<AppState>>, org_id: String) 
     json!({ "success": true })
 }
 
+#[tauri::command]
+async fn oauth_connect(
+    app: tauri::AppHandle,
+    state: State<'_, std::sync::Arc<AppState>>,
+    provider: String,
+) -> Result<Value, String> {
+    let result = oauth::connect(&app, &state.http, &provider).await;
+    if result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
+        state.cache.clear(); // show the new account on the next tick
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+fn oauth_disconnect(state: State<'_, std::sync::Arc<AppState>>, provider: String) -> Value {
+    oauth::clear_tokens(&provider);
+    state.cache.clear();
+    json!({ "ok": true })
+}
+
 /// Login STATE only — never a token. The field names are the renderer's
 /// contract (`hasUsableCredentials` gates the whole UI on
 /// cliFallbackAvailable / providerFallbackAvailable), so they match the
@@ -114,7 +135,9 @@ fn get_credentials(state: State<'_, std::sync::Arc<AppState>>) -> Value {
     let logged_in = anthropic::read_session_key().is_some();
     let external = providers::codex::available()
         || providers::gemini::has_credentials()
-        || providers::antigravity::available();
+        || providers::antigravity::available()
+        || oauth::load_tokens("openai").is_some()
+        || oauth::load_tokens("google").is_some();
     json!({
         "loggedIn": logged_in,
         "organizationId": state.store.get_or("organizationId", Value::Null),
@@ -695,6 +718,31 @@ fn main() {
             // login window. A 401 here is a PASS — it proves the webview
             // reached the real API and got a real status, rather than a
             // challenge page or a timeout.
+            // Pull the rendered DOM from the host side rather than having the
+            // page push it on a timer. A window on another Space is not
+            // rendered, and WebKit throttles its timers to a standstill — so a
+            // page-driven report simply never arrives, which looked exactly
+            // like a broken frontend. A host-initiated eval still runs.
+            if std::env::var("IMBURNING_DEV_REPORT").as_deref() == Ok("1") {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                    let Some(window) = handle.get_webview_window("main") else { return };
+                    let js = r#"JSON.stringify({
+                        title: document.title,
+                        google: [...document.querySelectorAll('#googleRows > *')].map(r => r.textContent.replace(/\s+/g,' ').trim()).filter(Boolean),
+                        openai: [...document.querySelectorAll('#openaiRows > *')].map(r => r.textContent.replace(/\s+/g,' ').trim()).filter(Boolean),
+                        anthropic: [...document.querySelectorAll('#scopedRows > *')].map(r => r.textContent.replace(/\s+/g,' ').trim()).filter(Boolean),
+                        chipGoogle: (document.getElementById('chipGoogle')||{}).textContent || null,
+                        planner: [...document.querySelectorAll('.planner-hint, .section-footer')].map(r => r.textContent.replace(/\s+/g,' ').trim()).filter(t => t.startsWith('Planner')),
+                        errors: window.__shimErrors || []
+                    })"#;
+                    let _ = window.eval_with_callback(js, |result| {
+                        dev_log(&format!("dom pull: {}", result));
+                    });
+                });
+            }
+
             // Its own flag: this reaches out to claude.ai twice, which should
             // not happen on every ordinary dev launch.
             if std::env::var("IMBURNING_PROBE").as_deref() == Ok("1") {
@@ -752,6 +800,8 @@ fn main() {
             save_settings,
             get_credentials,
             anthropic_login,
+            oauth_connect,
+            oauth_disconnect,
             delete_credentials,
             set_organization,
             get_usage_history,

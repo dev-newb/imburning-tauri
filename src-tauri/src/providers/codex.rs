@@ -160,7 +160,21 @@ fn normalize(json: &Value) -> Option<ProviderData> {
 }
 
 pub async fn fetch(client: &reqwest::Client) -> Option<ProviderData> {
-    for candidate in read_candidates() {
+    // A widget-owned OAuth login comes first: the user signed in through the
+    // app itself, so it is the account they expect to see. CLI credentials
+    // remain a fallback for people who do have codex installed.
+    let mut candidates: Vec<Candidate> = vec![];
+    if let Some(tokens) = crate::oauth::access_token(client, "openai").await {
+        if let Some(access) = tokens.get("accessToken").and_then(|v| v.as_str()) {
+            candidates.push(Candidate {
+                access_token: access.to_string(),
+                account_id: tokens.get("accountId").and_then(|v| v.as_str()).map(String::from),
+            });
+        }
+    }
+    candidates.extend(read_candidates());
+
+    for candidate in candidates {
         let mut req = client
             .get(USAGE)
             .header("Authorization", format!("Bearer {}", candidate.access_token))

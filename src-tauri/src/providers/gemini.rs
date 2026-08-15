@@ -15,7 +15,7 @@ const OAUTH: &str = "https://oauth2.googleapis.com/token";
 /// one. Discovering it from the local install (instead of hardcoding) means a
 /// client rotation upstream is picked up by reinstalling the CLI. Returns None
 /// when gemini-cli is not installed, which simply means no Gemini rows.
-fn oauth_client() -> Option<(String, String)> {
+pub fn oauth_client() -> Option<(String, String)> {
     use std::sync::OnceLock;
     static CACHE: OnceLock<Option<(String, String)>> = OnceLock::new();
     CACHE
@@ -232,8 +232,19 @@ pub fn normalize(quota: &Value) -> Option<Vec<Limit>> {
 }
 
 pub async fn fetch(client: &reqwest::Client) -> Option<ProviderData> {
-    let creds = read_creds()?;
-    let token = access_token(client, &creds).await?;
+    // Widget-owned login first, CLI credentials second — see codex::fetch.
+    let (token, email) = match crate::oauth::access_token(client, "google").await {
+        Some(tokens) => (
+            tokens.get("accessToken").and_then(|v| v.as_str())?.to_string(),
+            tokens.get("email").and_then(|v| v.as_str()).map(String::from),
+        ),
+        None => {
+            let creds = read_creds()?;
+            let token = access_token(client, &creds).await?;
+            let email = creds.id_token.as_deref().and_then(email_from_id_token);
+            (token, email)
+        }
+    };
     // Resolve the account's Code Assist project first: sending an empty object
     // succeeds but returns only a partial bucket set for some accounts.
     let load = post(
@@ -256,7 +267,7 @@ pub async fn fetch(client: &reqwest::Client) -> Option<ProviderData> {
     Some(ProviderData {
         source: "live".into(),
         connected: false, // via CLI login, not a widget-owned connection
-        email: creds.id_token.as_deref().and_then(email_from_id_token),
+        email,
         limits,
         cli: None,
         credits: None,
