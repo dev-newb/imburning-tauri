@@ -106,6 +106,16 @@ pub async fn fetch_all(client: &reqwest::Client, store: &Store, cache: &Cache, f
     // History records the UNFILTERED document: the visibility toggles are a
     // display choice and must never change which series get recorded.
     crate::history::record(&data);
+
+    // Analytics run AFTER the sample is recorded, so this refresh's own figure
+    // is part of the series they read — the Electron build orders it the same
+    // way, and a forecast that ignores the newest point lags by one interval.
+    let history = crate::history::read();
+    data["forecasts"] = crate::analytics::compute_forecasts(&history, store);
+    data["sessionPlans"] = crate::analytics::compute_session_plans(&history, store);
+    data["frozenProviders"] = crate::analytics::compute_frozen_providers(&data, &history);
+    crate::analytics::check_burn_anomalies(&history, store);
+    data["burningSeries"] = crate::analytics::burning_series_map();
     store.set("latestUsageData", data.clone());
     cache.put("usage", data.clone());
     data

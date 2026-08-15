@@ -7,6 +7,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod analytics;
 mod history;
 mod providers;
 mod settings;
@@ -25,9 +26,15 @@ struct AppState {
 }
 
 #[tauri::command]
-async fn fetch_usage_data(state: State<'_, std::sync::Arc<AppState>>, force: Option<bool>) -> Result<Value, String> {
+async fn fetch_usage_data(
+    app: tauri::AppHandle,
+    state: State<'_, std::sync::Arc<AppState>>,
+    force: Option<bool>,
+) -> Result<Value, String> {
     let force = force.unwrap_or(false);
-    Ok(usage::fetch_all(&state.http, &state.store, &state.cache, force).await)
+    let data = usage::fetch_all(&state.http, &state.store, &state.cache, force).await;
+    emit_burn_alerts(&app, &state).await;
+    Ok(data)
 }
 
 #[tauri::command]
@@ -111,6 +118,24 @@ fn dev_log(text: &str) {
     use std::io::Write;
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
         let _ = writeln!(f, "{}", text);
+    }
+}
+
+/// Surface any burn-spike alerts the detector raised during a fetch. Electron
+/// fires these from its main process; here the fetch has no AppHandle, so the
+/// callers that do drain the queue and emit. Notification AND webhook, because
+/// the Electron build sends both.
+async fn emit_burn_alerts(app: &tauri::AppHandle, state: &std::sync::Arc<AppState>) {
+    use tauri_plugin_notification::NotificationExt;
+    for alert in analytics::drain_alerts() {
+        let _ = app
+            .notification()
+            .builder()
+            .title("I'm Burning! — unusual token burn")
+            .body(&alert.body)
+            .show();
+        post_webhook(state, "burn_spike", "Unusual token burn", &alert.body).await;
+        let _ = app.emit("burn-alert", &alert.body);
     }
 }
 
@@ -298,18 +323,23 @@ async fn send_alert_webhook(
     title: String,
     message: String,
 ) -> Result<(), String> {
+    post_webhook(&state, &event, &title, &message).await;
+    Ok(())
+}
+
+async fn post_webhook(state: &std::sync::Arc<AppState>, event: &str, title: &str, message: &str) {
     let webhook = state.store.get_or("settings.webhook", json!({}));
     if !webhook.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false) {
-        return Ok(());
+        return;
     }
     let Some(url) = webhook.get("url").and_then(|v| v.as_str()).filter(|u| !u.is_empty()) else {
-        return Ok(());
+        return;
     };
-    let Ok(parsed) = reqwest::Url::parse(url) else { return Ok(()) };
+    let Ok(parsed) = reqwest::Url::parse(url) else { return };
     let host = parsed.host_str().unwrap_or("");
     let is_local = host == "localhost" || host == "127.0.0.1";
     if !(parsed.scheme() == "https" || (parsed.scheme() == "http" && is_local)) {
-        return Ok(());
+        return;
     }
 
     let request = if host.to_lowercase().contains("ntfy") {
@@ -319,7 +349,7 @@ async fn send_alert_webhook(
             .header("Content-Type", "text/plain")
             .header("Title", title)
             .header("Tags", "chart_with_upwards_trend")
-            .body(message)
+            .body(message.to_string())
     } else {
         state.http.post(parsed).json(&json!({
             "event": event,
@@ -330,7 +360,6 @@ async fn send_alert_webhook(
         }))
     };
     let _ = request.send().await; // best effort: an alert must never block the UI
-    Ok(())
 }
 
 /// Custom alert sounds live outside the bundle. Hand the renderer the bytes as
@@ -447,6 +476,7 @@ fn main() {
                         .clamp(1, 60);
                     tokio::time::sleep(std::time::Duration::from_secs(minutes * 60)).await;
                     let _ = usage::fetch_all(&state.http, &state.store, &state.cache, true).await;
+                    emit_burn_alerts(&handle, &state).await;
                     let _ = handle.emit("usage-updated", ());
                 }
             });
