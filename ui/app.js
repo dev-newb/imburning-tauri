@@ -1358,11 +1358,15 @@ function buildExtraRows(data) {
             }
             row.appendChild(resetsText);
         } else {
-            // Gemini row keys are gemini_m_<model> / gemini_cli_m_<model> —
-            // the "daily" window lives in the label, not the key, so match the
-            // provider prefix too (otherwise the ring/pie use a 5h window)
-            const totalMinutes = key.includes('seven_day') ? 7 * 24 * 60
-                : (key.includes('daily') || key.startsWith('gemini_')) ? 24 * 60 : 5 * 60;
+            // Prefer the window the backend states outright. Guessing it from
+            // the key only works while a prefix implies one window length, and
+            // Google broke that: classic Code Assist buckets are daily, but
+            // Antigravity's pools reset roughly 5-hourly under the same
+            // gemini_ prefix, which made the elapsed ring wrong by ~5x — it
+            // showed a window as nearly over the moment it began.
+            const totalMinutes = value.windowMinutes
+                || (key.includes('seven_day') ? 7 * 24 * 60
+                    : (key.includes('daily') || key.startsWith('gemini_')) ? 24 * 60 : 5 * 60);
 
             const barGroup = document.createElement('div');
             barGroup.className = 'usage-bar-group';
@@ -1730,37 +1734,6 @@ function _sortRowsByUsage() {
         rows.sort((a, b) => pct(b) - pct(a));
         for (const row of rows) container.appendChild(row);
     }
-}
-
-// Some rows ship hidden: the Claude / GPT-OSS pools Antigravity meters are
-// real usage, but they arrive under a Google heading where they would surprise
-// anyone who never opened Antigravity. Hide each ONCE, on first sight, and
-// record that in hiddenRowsSeeded so restoring it sticks — after which it
-// behaves like any row the user hid by hand, restored from the "N hidden" chip.
-function seedDefaultHiddenRows(data) {
-    const marks = [];
-    const collect = (prefix, limits) => {
-        for (const limit of (limits || [])) if (limit.defaultHidden) marks.push(prefix + limit.key);
-    };
-    collect('gemini_', data?.gemini?.limits);
-    collect('gemini_cli_', data?.gemini?.cli?.limits);
-    if (!marks.length) return;
-
-    const settings = window._cachedSettings || {};
-    const seeded = { ...(settings.hiddenRowsSeeded || {}) };
-    const hiddenRows = { ...(settings.hiddenRows || {}) };
-    let changed = false;
-    for (const key of marks) {
-        if (seeded[key]) continue;
-        seeded[key] = true;
-        hiddenRows[key] = true;
-        changed = true;
-    }
-    if (!changed) return;
-    // Update the cache synchronously so THIS render already hides them; the
-    // persist can land whenever.
-    window._cachedSettings = { ...settings, hiddenRowsSeeded: seeded, hiddenRows };
-    _saveSettingsPatch({ hiddenRowsSeeded: seeded, hiddenRows });
 }
 
 async function hideRow(key) {
@@ -2919,13 +2892,13 @@ function normalizeUsageData(data) {
         for (const lim of cx.limits) {
             const key = 'codex_' + lim.key;
             if (!EXTRA_ROW_CONFIG[key]) EXTRA_ROW_CONFIG[key] = { label: lim.label, color: 'codex' };
-            data[key] = { utilization: lim.percent, resets_at: lim.resetsAt };
+            data[key] = { utilization: lim.percent, resets_at: lim.resetsAt, windowMinutes: lim.windowMinutes };
         }
         // Dual mode: the codex CLI is a different account - tracked separately
         for (const lim of (cx.cli && cx.cli.limits || [])) {
             const key = 'codex_cli_' + lim.key;
             if (!EXTRA_ROW_CONFIG[key]) EXTRA_ROW_CONFIG[key] = { label: 'CLI ' + lim.label, color: 'codex' };
-            data[key] = { utilization: lim.percent, resets_at: lim.resetsAt };
+            data[key] = { utilization: lim.percent, resets_at: lim.resetsAt, windowMinutes: lim.windowMinutes };
         }
         const extraUsage = EXTRA_ROW_CONFIG.extra_usage;
         delete EXTRA_ROW_CONFIG.extra_usage;
@@ -2939,13 +2912,13 @@ function normalizeUsageData(data) {
         for (const lim of gm.limits) {
             const key = 'gemini_' + lim.key;
             if (!EXTRA_ROW_CONFIG[key]) EXTRA_ROW_CONFIG[key] = { label: lim.label, color: 'gemini' };
-            data[key] = { utilization: lim.percent, resets_at: lim.resetsAt };
+            data[key] = { utilization: lim.percent, resets_at: lim.resetsAt, windowMinutes: lim.windowMinutes };
         }
         // Dual mode: the gemini CLI is a different account - tracked separately
         for (const lim of (gm.cli && gm.cli.limits || [])) {
             const key = 'gemini_cli_' + lim.key;
             if (!EXTRA_ROW_CONFIG[key]) EXTRA_ROW_CONFIG[key] = { label: 'CLI ' + lim.label, color: 'gemini' };
-            data[key] = { utilization: lim.percent, resets_at: lim.resetsAt };
+            data[key] = { utilization: lim.percent, resets_at: lim.resetsAt, windowMinutes: lim.windowMinutes };
         }
         const extraUsage = EXTRA_ROW_CONFIG.extra_usage;
         delete EXTRA_ROW_CONFIG.extra_usage;
@@ -2984,7 +2957,6 @@ function computeBurningRowKeys(data) {
 }
 
 function updateUI(data) {
-    seedDefaultHiddenRows(data);
     latestUsageData = normalizeUsageData(data);
     _burningRowKeys = computeBurningRowKeys(data);
     checkBurnSpikeSound(_burningRowKeys);

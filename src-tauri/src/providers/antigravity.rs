@@ -6,8 +6,14 @@
 //   1. cloudcode-pa answers 403 PERMISSION_DENIED to a request that sends no
 //      User-Agent. Same token, same body — the header alone decides.
 //   2. Every Gemini model reports ONE shared allowance (identical fraction and
-//      reset time), with Claude/GPT-OSS on a second. Rows are grouped by quota
-//      signature so a single pool draws a single bar.
+//      reset time). Rows are grouped by quota signature so a single pool draws
+//      a single bar.
+//
+// The catalogue also meters Claude and GPT-OSS against a separate allowance.
+// Those are Anthropic's and OpenAI's models, not Google's, and they are
+// dropped here at the source — a row that never exists cannot be folded into
+// the Google section's badge, history series or alerts by some reducer
+// downstream that forgot to filter it out.
 
 use crate::providers::{Limit, ProviderData};
 use serde_json::Value;
@@ -315,7 +321,7 @@ fn group(entries: Vec<Entry>, family_label: &str) -> Vec<Limit> {
                     .collect::<Vec<_>>()
                     .join("_")
             );
-            Limit { key, label, percent, resets_at: Some(resets_at) , default_hidden: false}
+            Limit { key, label, percent, resets_at: Some(resets_at)}
         })
         .collect();
     out.sort_by(|a, b| {
@@ -329,7 +335,6 @@ fn group(entries: Vec<Entry>, family_label: &str) -> Vec<Limit> {
 pub fn normalize(json: &Value) -> Option<ProviderData> {
     let models = json.get("models")?.as_object()?;
     let mut gemini = vec![];
-    let mut foreign = vec![];
     for (model_id, m) in models {
         let Some(qi) = m.get("quotaInfo") else { continue };
         if model_id.starts_with("chat_") || model_id.starts_with("tab_") {
@@ -344,18 +349,20 @@ pub fn normalize(json: &Value) -> Option<ProviderData> {
         // would hide the row at exactly the moment worth warning about.
         let fraction = qi.get("remainingFraction").and_then(|v| v.as_f64()).unwrap_or(0.0);
         let display = m.get("displayName").and_then(|v| v.as_str());
+        let is_gemini = model_id.starts_with("gemini")
+            || display.map(|d| d.to_lowercase().contains("gemini")).unwrap_or(false);
+        if !is_gemini {
+            continue; // Claude / GPT-OSS — another vendor's models, not Google's
+        }
         let entry = Entry {
             label: label_for(display, model_id),
             percent: ((1.0 - fraction) * 1000.0).round() / 10.0,
             resets_at: reset.to_string(),
         };
-        let is_gemini = model_id.starts_with("gemini")
-            || display.map(|d| d.to_lowercase().contains("gemini")).unwrap_or(false);
-        if is_gemini { gemini.push(entry) } else { foreign.push(entry) }
+        gemini.push(entry);
     }
     let limits = group(gemini, "Gemini (all models)");
-    let foreign = group(foreign, "Non-Gemini models");
-    if limits.is_empty() && foreign.is_empty() {
+    if limits.is_empty() {
         return None;
     }
     Some(ProviderData {
@@ -363,7 +370,6 @@ pub fn normalize(json: &Value) -> Option<ProviderData> {
         connected: true,
         email: None,
         limits,
-        foreign,
         cli: None,
         credits: None,
         reset_credits: None,

@@ -1,7 +1,7 @@
 // Assembles the single usage document the renderer consumes, mirroring the
 // Electron build's `fetch-usage-data` reply field for field.
 
-use crate::providers::{antigravity, claude_code, codex, gemini, Limit, ProviderData};
+use crate::providers::{antigravity, claude_code, codex, gemini, ProviderData};
 use crate::store::Store;
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};
@@ -52,16 +52,7 @@ async fn google(client: &reqwest::Client, store: &Store) -> Option<ProviderData>
         .to_string();
     let want_antigravity = source == "antigravity" || (source == "auto" && antigravity::available());
     if want_antigravity {
-        if let Some(mut data) = antigravity::fetch(client, store).await {
-            // The Claude/GPT-OSS pools Antigravity meters are real usage on the
-            // same login, so they belong in the section — but they ship hidden,
-            // because under a Google heading they surprise anyone who has never
-            // opened Antigravity. The renderer hides each once, on first sight.
-            let foreign = std::mem::take(&mut data.foreign);
-            data.limits.extend(foreign.into_iter().map(|limit| Limit {
-                default_hidden: true,
-                ..limit
-            }));
+        if let Some(data) = antigravity::fetch(client, store).await {
             return Some(data);
         }
         if source == "antigravity" {

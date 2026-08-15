@@ -221,7 +221,6 @@ pub fn normalize(quota: &Value) -> Option<Vec<Limit>> {
                 label: model_label(model_id),
                 percent: ((1.0 - fraction) * 1000.0).round() / 10.0,
                 resets_at: bucket.get("resetTime").and_then(|v| v.as_str()).map(String::from),
-                default_hidden: false,
             },
         ));
     }
@@ -259,7 +258,6 @@ pub async fn fetch(client: &reqwest::Client) -> Option<ProviderData> {
         connected: false, // via CLI login, not a widget-owned connection
         email: creds.id_token.as_deref().and_then(email_from_id_token),
         limits,
-        foreign: vec![],
         cli: None,
         credits: None,
         reset_credits: None,

@@ -16,12 +16,6 @@ pub struct Limit {
     pub percent: f64,
     #[serde(rename = "resetsAt", skip_serializing_if = "Option::is_none")]
     pub resets_at: Option<String>,
-    /// Ships hidden on first sight; the renderer records that once in
-    /// hiddenRowsSeeded and thereafter treats the row as any other.
-    /// Must be a real field: setting it on the serialized JSON and parsing
-    /// back into this struct silently drops it.
-    #[serde(rename = "defaultHidden", default, skip_serializing_if = "std::ops::Not::not")]
-    pub default_hidden: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,10 +25,6 @@ pub struct ProviderData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
     pub limits: Vec<Limit>,
-    /// Pools metered by the same login but belonging to another vendor
-    /// (Claude / GPT-OSS via Antigravity). Fetched, not yet rendered.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub foreign: Vec<Limit>,
     /// A second account for the same provider (the CLI login), when it differs
     /// from the one the widget itself is signed into.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -57,7 +47,6 @@ impl ProviderData {
             connected: false,
             email: None,
             limits: vec![],
-            foreign: vec![],
             cli: None,
             credits: None,
             reset_credits: None,

@@ -24,11 +24,16 @@ fn matches_js_normalizer() {
     assert_eq!(out.limits[0].percent, 1.5);
     assert_eq!(out.limits[0].resets_at.as_deref(), Some("2026-08-12T12:09:53Z"));
 
-    assert_eq!(out.foreign.len(), 1, "Claude + GPT-OSS share one pool");
-    assert_eq!(out.foreign[0].key, "m_non_gemini_models");
-    assert_eq!(out.foreign[0].label, "Non-Gemini models");
-    assert_eq!(out.foreign[0].percent, 0.0);
-    assert_eq!(out.foreign[0].resets_at.as_deref(), Some("2026-08-12T16:15:36Z"));
+    // Claude and GPT-OSS are metered by the same login but are not Google's
+    // models: they must not reach the Google section in any form.
+    assert!(
+        !out.limits.iter().any(|l| {
+            let l = l.label.to_lowercase();
+            l.contains("claude") || l.contains("gpt") || l.contains("non-gemini")
+        }),
+        "no non-Google pool may appear in the Google rows: {:?}",
+        out.limits.iter().map(|l| &l.label).collect::<Vec<_>>()
+    );
 }
 
 #[test]
