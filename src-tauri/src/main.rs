@@ -167,7 +167,24 @@ fn dev_report(text: String) {
     dev_log(&text);
 }
 
-fn dev_log(text: &str) {
+/// Errors a user can actually hit — a failed sign-in, a rejected token
+/// exchange — always go to a log file. Gating those behind a debug env var
+/// means the one moment you need the reason is the moment it was not recorded.
+pub fn log_error(text: &str) {
+    let path = dirs::home_dir()
+        .map(|h| h.join("Library/Logs/imburning-tauri.log"))
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp/imburning-tauri.log"));
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(f, "[{}] {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), text);
+    }
+    dev_log(text);
+}
+
+pub fn dev_log(text: &str) {
     if std::env::var("IMBURNING_DEV_REPORT").as_deref() != Ok("1") {
         return;
     }

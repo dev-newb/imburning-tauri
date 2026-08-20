@@ -215,6 +215,17 @@ pub async fn login(app: &AppHandle) -> Value {
     let Ok(url) = LOGIN_URL.parse() else {
         return json!({ "success": false, "error": "bad login url" });
     };
+    // Snapshot any sessionKey already in the shared cookie jar BEFORE opening
+    // the window. The fetch webview and previous sessions leave one there, and
+    // without this the login window opens, immediately sees that stale cookie,
+    // declares victory and closes again — which looks exactly like the window
+    // flashing open and vanishing. Electron deletes the cookie at this point;
+    // Tauri has no delete API, so instead we insist on a value that CHANGED.
+    let baseline = app
+        .get_webview_window(FETCH_WEBVIEW)
+        .or_else(|| app.get_webview_window("main"))
+        .and_then(|w| session_key_from(&w));
+
     let window = match WebviewWindowBuilder::new(app, LOGIN_WEBVIEW, WebviewUrl::External(url))
         .title("Claude Login — claude.ai")
         .inner_size(1000.0, 700.0)
@@ -232,7 +243,10 @@ pub async fn login(app: &AppHandle) -> Value {
             return json!({ "success": false, "error": "Login window closed" });
         }
         if let Some(key) = session_key_from(&window) {
-            break key;
+            // Only a NEW key means the user actually signed in just now.
+            if baseline.as_deref() != Some(key.as_str()) {
+                break key;
+            }
         }
         if Instant::now() > deadline {
             let _ = window.close();
@@ -253,7 +267,10 @@ pub async fn login(app: &AppHandle) -> Value {
             Some((id, list)) => json!({ "success": true, "organizationId": id, "organizations": list }),
             None => json!({ "success": false, "error": "No chat-enabled organizations found" }),
         },
-        Err(e) => json!({ "success": false, "error": e }),
+        Err(e) => {
+            crate::log_error(&format!("anthropic login: {}", e));
+            json!({ "success": false, "error": e })
+        }
     }
 }
 

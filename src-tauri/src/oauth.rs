@@ -291,15 +291,32 @@ pub async fn connect(app: &tauri::AppHandle, client: &reqwest::Client, provider:
         .form(&form)
         .send()
         .await;
-    let Ok(res) = res else {
-        return json!({ "ok": false, "error": "Token exchange failed" });
+    let res = match res {
+        Ok(r) => r,
+        Err(e) => {
+            crate::log_error(&format!("oauth {}: transport error {}", provider, e));
+            return json!({ "ok": false, "error": format!("Token exchange failed: {}", e) });
+        }
     };
     let status = res.status();
-    let Ok(body) = res.json::<Value>().await else {
-        return json!({ "ok": false, "error": format!("Token exchange failed ({})", status) });
-    };
+    let raw = res.text().await.unwrap_or_default();
+    let body: Value = serde_json::from_str(&raw).unwrap_or(Value::Null);
     let Some(access) = body.get("access_token").and_then(|v| v.as_str()) else {
-        return json!({ "ok": false, "error": format!("Token exchange failed ({})", status) });
+        // The provider's own error text is the only thing that explains this,
+        // so surface it instead of a bare status code.
+        crate::log_error(&format!(
+            "oauth {}: exchange HTTP {} body {}",
+            provider,
+            status,
+            &raw[..raw.len().min(400)]
+        ));
+        let detail = body
+            .get("error_description")
+            .or_else(|| body.get("error"))
+            .and_then(|v| v.as_str())
+            .map(String::from)
+            .unwrap_or_else(|| format!("HTTP {}", status));
+        return json!({ "ok": false, "error": format!("Token exchange failed: {}", detail) });
     };
 
     let claims = jwt_claims(body.get("id_token").and_then(|v| v.as_str()));
