@@ -234,6 +234,16 @@ fn resize_window(
     if !force.unwrap_or(false) && window_is_user_sized(&window) {
         return;
     }
+    // Tall holds its height. The renderer measures the content and asks to
+    // shrink to it, which is right for the default layout and wrong for a
+    // preset whose entire purpose is the extra room.
+    if let Some(floor) = PRESET_MIN_HEIGHT.lock().ok().and_then(|f| *f) {
+        if height < floor {
+            dev_log(&format!("  (held at preset floor {:.0}, refused {:.0})", floor, height));
+            return;
+        }
+    }
+
     // Damp the settle jitter. While a preset is active two renderer passes
     // disagree by a few pixels — _fitPresetHeight wants one height,
     // _fitWidePresetWithGraph another, and the latter calls through with no
@@ -493,6 +503,11 @@ fn apply_window_preset(window: tauri::Window, preset: String) {
     if let Ok(mut slot) = MANAGED_PRESET_WIDTH.lock() {
         *slot = if preset == "wide" { Some(width) } else { None };
     }
+    if let Ok(mut slot) = PRESET_MIN_HEIGHT.lock() {
+        // Only tall claims a floor. Wide is about columns, so letting its
+        // height settle to the content is correct there.
+        *slot = if preset == "tall" { Some(height) } else { None };
+    }
     if preset == "reset" {
         set_active_preset(None);
         set_expected_width(WIDGET_WIDTH);
@@ -523,10 +538,28 @@ static MANAGED_PRESET_WIDTH: std::sync::Mutex<Option<f64>> = std::sync::Mutex::n
 /// How far the width may drift before the preset concludes the user has taken
 /// over and stops managing it.
 const PRESET_WIDTH_TOLERANCE: f64 = 12.0;
+/// A height the active preset refuses to shrink below. Tall means tall — its
+/// button promises "room to breathe" — but the renderer's fit pass measures
+/// the content and asks to collapse back to it, which made tall land at
+/// exactly the height you get with no preset at all.
+static PRESET_MIN_HEIGHT: std::sync::Mutex<Option<f64>> = std::sync::Mutex::new(None);
 
 fn set_active_preset(preset: Option<String>) {
+    let clearing = preset.is_none();
     if let Ok(mut slot) = ACTIVE_PRESET.lock() {
         *slot = preset;
+    }
+    // A preset's geometry claims live and die WITH it. Keeping them as
+    // separate flags each caller has to remember is how the tall floor
+    // survived into compact mode and blocked its resize — the same shape of
+    // bug as every other one in this file's history.
+    if clearing {
+        if let Ok(mut slot) = PRESET_MIN_HEIGHT.lock() {
+            *slot = None;
+        }
+        if let Ok(mut slot) = MANAGED_PRESET_WIDTH.lock() {
+            *slot = None;
+        }
     }
 }
 
