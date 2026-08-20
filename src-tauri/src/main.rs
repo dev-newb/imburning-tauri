@@ -298,15 +298,56 @@ fn geometry_is_user_sized(logical_w: f64, logical_h: f64) -> bool {
     expected_h > 0.0 && (logical_h - expected_h).abs() > 24.0
 }
 
+/// Widen the columns in landscape. Guarded exactly as the Electron handler is,
+/// because an unguarded version is actively harmful: it fired while compact
+/// was on and produced a huge window full of compact rows, and it could grow
+/// the window past the display.
 #[tauri::command]
 fn fit_landscape_width(window: tauri::Window, width: f64) {
-    if width <= 0.0 {
+    const WIDE_PRESET_WIDTH: f64 = 900.0;
+    const MIN_WIDGET_WIDTH: f64 = 290.0;
+
+    // Only the wide preset manages width, and only while it still owns it.
+    if ACTIVE_PRESET.lock().map(|p| p.as_deref() != Some("wide")).unwrap_or(true) {
         return;
     }
-    if let Ok(size) = window.inner_size() {
-        let scale = window.scale_factor().unwrap_or(1.0);
-        set_expected_width(width);
-        let _ = window.set_size(tauri::LogicalSize::new(width, size.height as f64 / scale));
+    let Some(managed) = MANAGED_PRESET_WIDTH.lock().ok().and_then(|m| *m) else {
+        return;
+    };
+    let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) else {
+        return;
+    };
+    let current = size.width as f64 / scale;
+
+    // Drifted from what we set: the user has taken the width over, so stop
+    // managing it rather than yanking it back under them.
+    if (current - managed).abs() > PRESET_WIDTH_TOLERANCE {
+        if let Ok(mut slot) = MANAGED_PRESET_WIDTH.lock() {
+            *slot = None;
+        }
+        return;
+    }
+
+    let requested = if width > 0.0 { width.round().max(MIN_WIDGET_WIDTH) } else { WIDE_PRESET_WIDTH };
+    let available = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .map(|m| m.size().width as f64 / m.scale_factor())
+        .unwrap_or(requested);
+    let target = requested.min(available);
+
+    if (target - current).abs() < 2.0 {
+        if let Ok(mut slot) = MANAGED_PRESET_WIDTH.lock() {
+            *slot = Some(target);
+        }
+        return;
+    }
+    dev_log(&format!("  fitLandscapeWidth {:.0} -> {:.0}", current, target));
+    set_expected_width(target);
+    let _ = window.set_size(tauri::LogicalSize::new(target, size.height as f64 / scale));
+    if let Ok(mut slot) = MANAGED_PRESET_WIDTH.lock() {
+        *slot = Some(target);
     }
 }
 
@@ -358,6 +399,9 @@ fn set_compact_mode(window: tauri::Window, state: State<'_, std::sync::Arc<AppSt
     const MIN_WIDGET_WIDTH: f64 = 290.0;
 
     set_active_preset(None);
+    if let Ok(mut slot) = MANAGED_PRESET_WIDTH.lock() {
+        *slot = None;
+    }
 
     let width = if compact { 320.0 } else { WIDGET_WIDTH };
     set_expected_width(width);
@@ -446,6 +490,9 @@ fn apply_window_preset(window: tauri::Window, preset: String) {
         height = height.min(size.height as f64 / scale);
     }
 
+    if let Ok(mut slot) = MANAGED_PRESET_WIDTH.lock() {
+        *slot = if preset == "wide" { Some(width) } else { None };
+    }
     if preset == "reset" {
         set_active_preset(None);
         set_expected_width(WIDGET_WIDTH);
@@ -468,6 +515,14 @@ fn apply_window_preset(window: tauri::Window, preset: String) {
 static ACTIVE_PRESET: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 /// The width the backend intends the window to have.
 static EXPECTED_WIDTH: std::sync::Mutex<f64> = std::sync::Mutex::new(590.0);
+/// The width the WIDE preset is currently managing, if it still owns it. None
+/// means nothing may adjust the width — which is the whole point: without this
+/// gate the renderer's landscape fit fired in compact mode and in tall, giving
+/// a huge window full of compact rows.
+static MANAGED_PRESET_WIDTH: std::sync::Mutex<Option<f64>> = std::sync::Mutex::new(None);
+/// How far the width may drift before the preset concludes the user has taken
+/// over and stops managing it.
+const PRESET_WIDTH_TOLERANCE: f64 = 12.0;
 
 fn set_active_preset(preset: Option<String>) {
     if let Ok(mut slot) = ACTIVE_PRESET.lock() {
