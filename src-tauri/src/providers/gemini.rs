@@ -233,11 +233,15 @@ pub fn normalize(quota: &Value) -> Option<Vec<Limit>> {
 
 pub async fn fetch(client: &reqwest::Client) -> Option<ProviderData> {
     // Widget-owned login first, CLI credentials second — see codex::fetch.
+    let mut widget_login = false;
     let (token, email) = match crate::oauth::access_token(client, "google").await {
-        Some(tokens) => (
-            tokens.get("accessToken").and_then(|v| v.as_str())?.to_string(),
-            tokens.get("email").and_then(|v| v.as_str()).map(String::from),
-        ),
+        Some(tokens) => {
+            widget_login = true;
+            (
+                tokens.get("accessToken").and_then(|v| v.as_str())?.to_string(),
+                tokens.get("email").and_then(|v| v.as_str()).map(String::from),
+            )
+        }
         None => {
             let creds = read_creds()?;
             let token = access_token(client, &creds).await?;
@@ -266,7 +270,7 @@ pub async fn fetch(client: &reqwest::Client) -> Option<ProviderData> {
     let limits = normalize(&quota)?;
     Some(ProviderData {
         source: "live".into(),
-        connected: false, // via CLI login, not a widget-owned connection
+        connected: widget_login,
         email,
         limits,
         cli: None,

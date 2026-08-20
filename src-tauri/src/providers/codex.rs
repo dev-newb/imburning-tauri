@@ -76,7 +76,7 @@ fn window_limit(window: &Value, key: String, label: String) -> Option<Limit> {
     Some(Limit { key, label, percent: used, resets_at: reset_iso(window)})
 }
 
-fn normalize(json: &Value) -> Option<ProviderData> {
+fn normalize(json: &Value, widget_login: bool) -> Option<ProviderData> {
     let mut limits = vec![];
     for (field, prefix) in [("primary_window", "primary"), ("secondary_window", "secondary")] {
         let Some(w) = json.get("rate_limit").and_then(|r| r.get(field)) else { continue };
@@ -145,7 +145,11 @@ fn normalize(json: &Value) -> Option<ProviderData> {
 
     Some(ProviderData {
         source: "live".into(),
-        connected: false, // via CLI login
+        // TRUE when the user signed in through the app itself. The UI shows
+        // "Not connected (using CLI login)" off this flag, so hardcoding it
+        // false meant a successful sign-in still reported as not connected —
+        // the token was in the keychain the whole time.
+        connected: widget_login,
         email: json.get("email").and_then(|v| v.as_str()).map(String::from),
         limits,
         cli: None,
@@ -163,18 +167,22 @@ pub async fn fetch(client: &reqwest::Client) -> Option<ProviderData> {
     // A widget-owned OAuth login comes first: the user signed in through the
     // app itself, so it is the account they expect to see. CLI credentials
     // remain a fallback for people who do have codex installed.
-    let mut candidates: Vec<Candidate> = vec![];
+    // (candidate, came_from_widget_login)
+    let mut candidates: Vec<(Candidate, bool)> = vec![];
     if let Some(tokens) = crate::oauth::access_token(client, "openai").await {
         if let Some(access) = tokens.get("accessToken").and_then(|v| v.as_str()) {
-            candidates.push(Candidate {
-                access_token: access.to_string(),
-                account_id: tokens.get("accountId").and_then(|v| v.as_str()).map(String::from),
-            });
+            candidates.push((
+                Candidate {
+                    access_token: access.to_string(),
+                    account_id: tokens.get("accountId").and_then(|v| v.as_str()).map(String::from),
+                },
+                true,
+            ));
         }
     }
-    candidates.extend(read_candidates());
+    candidates.extend(read_candidates().into_iter().map(|c| (c, false)));
 
-    for candidate in candidates {
+    for (candidate, widget_login) in candidates {
         let mut req = client
             .get(USAGE)
             .header("Authorization", format!("Bearer {}", candidate.access_token))
@@ -187,7 +195,13 @@ pub async fn fetch(client: &reqwest::Client) -> Option<ProviderData> {
             continue;
         }
         let Ok(json) = res.json::<Value>().await else { continue };
-        if let Some(data) = normalize(&json) {
+        if let Some(mut data) = normalize(&json, widget_login) {
+            // Prefer the identity from the login itself; the usage payload
+            // does not always carry an email.
+            if widget_login && data.email.is_none() {
+                data.email = crate::oauth::load_tokens("openai")
+                    .and_then(|t| t.get("email").and_then(|v| v.as_str()).map(String::from));
+            }
             return Some(data);
         }
     }
