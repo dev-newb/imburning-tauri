@@ -229,21 +229,13 @@ fn resize_window(
         user_action.unwrap_or(false), traced
     ));
     if force.unwrap_or(false) && !deliberate && window_is_user_sized(&window) {
+        dev_log("    rejected: forced background refit on a user-sized window");
         return;
     }
     if !force.unwrap_or(false) && window_is_user_sized(&window) {
+        dev_log("    rejected: unforced fit on a user-sized window");
         return;
     }
-    // Tall holds its height. The renderer measures the content and asks to
-    // shrink to it, which is right for the default layout and wrong for a
-    // preset whose entire purpose is the extra room.
-    if let Some(floor) = PRESET_MIN_HEIGHT.lock().ok().and_then(|f| *f) {
-        if height < floor {
-            dev_log(&format!("  (held at preset floor {:.0}, refused {:.0})", floor, height));
-            return;
-        }
-    }
-
     // Damp the settle jitter. While a preset is active two renderer passes
     // disagree by a few pixels — _fitPresetHeight wants one height,
     // _fitWidePresetWithGraph another, and the latter calls through with no
@@ -264,6 +256,9 @@ fn resize_window(
         let logical_width = size.width as f64 / scale;
         let floor = MIN_HEIGHT.lock().map(|h| *h).unwrap_or(180.0);
         let target = height.max(if COMPACT.load(std::sync::atomic::Ordering::Relaxed) { 90.0 } else { floor });
+        if (target - height).abs() > 0.5 {
+            dev_log(&format!("    NOTE: floor {:.0} raised requested {:.0} to {:.0}", floor, height, target));
+        }
         dev_log(&format!(
             "resize_window requested={:.0} applied={:.0} width={:.0}",
             height, target, logical_width
@@ -503,11 +498,6 @@ fn apply_window_preset(window: tauri::Window, preset: String) {
     if let Ok(mut slot) = MANAGED_PRESET_WIDTH.lock() {
         *slot = if preset == "wide" { Some(width) } else { None };
     }
-    if let Ok(mut slot) = PRESET_MIN_HEIGHT.lock() {
-        // Only tall claims a floor. Wide is about columns, so letting its
-        // height settle to the content is correct there.
-        *slot = if preset == "tall" { Some(height) } else { None };
-    }
     if preset == "reset" {
         set_active_preset(None);
         set_expected_width(WIDGET_WIDTH);
@@ -520,10 +510,72 @@ fn apply_window_preset(window: tauri::Window, preset: String) {
     }
     dev_log(&format!("  preset({}) -> {:.0}x{:.0}", preset, width, height));
     let _ = window.set_size(tauri::LogicalSize::new(width, height));
+    if preset != "reset" {
+        settle_preset_height(&window);
+    }
     // Announce the new ownership at once. The renderer keys `landscape` off
     // this, and waiting for the debounced resize event to say the same thing
     // is a race the layout should not depend on.
     let _ = window.emit("window-user-sized", preset != "reset");
+}
+
+/// Size a preset down to the content it actually has.
+///
+/// The preset height is deliberately generous — tall asks for 1150 — and the
+/// renderer is supposed to measure the content and shrink to it. But that fit
+/// runs inside requestAnimationFrame, and macOS throttles rAF to a standstill
+/// whenever the window is not being rendered. When it does not fire the blind
+/// preset height simply stays, which is the 362px of dead space under the
+/// graph: window 1150, content 788.
+///
+/// So the measurement is driven from here instead. A host-initiated eval is
+/// never throttled, and the reply is a single number.
+fn settle_preset_height(window: &tauri::Window) {
+    // eval lives on the WebviewWindow, not the Window.
+    let Some(w) = window.app_handle().get_webview_window(window.label()) else {
+        return;
+    };
+    tauri::async_runtime::spawn(async move {
+        // Two passes: a preset switch triggers a large reflow, and the first
+        // measurement can land mid-flight.
+        for delay in [350u64, 800] {
+            tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+            let (tx, rx) = std::sync::mpsc::channel();
+            // mainContent's top IS the chrome height, and its childrens'
+            // furthest bottom is the real content extent — the same
+            // measurement _intrinsicMainContentHeight makes, minus the rAF.
+            // Use the renderer's OWN measurement functions, not a
+            // reimplementation of them. A hand-rolled version disagreed by
+            // 15px (it missed the bottom bar), and the two then took turns
+            // resizing the window to their own answer.
+            let js = r#"(function(){
+                try {
+                    if (typeof _chromeHeight === 'function' && typeof _intrinsicMainContentHeight === 'function') {
+                        return Math.ceil(_chromeHeight() + _intrinsicMainContentHeight() + 10);
+                    }
+                } catch (e) {}
+                return 0;
+            })()"#;
+            if w.eval_with_callback(js, move |r| { let _ = tx.send(r); }).is_err() {
+                return;
+            }
+            let Ok(raw) = rx.recv_timeout(std::time::Duration::from_secs(3)) else { return };
+            let Ok(target) = raw.trim().parse::<f64>() else { return };
+            if target < 120.0 {
+                continue; // measured mid-reflow
+            }
+            let (Ok(size), Ok(scale)) = (w.inner_size(), w.scale_factor()) else { return };
+            let current = size.height as f64 / scale;
+            if (target - current).abs() <= 12.0 {
+                continue;
+            }
+            dev_log(&format!("  settle: content {:.0} vs window {:.0}", target, current));
+            if let Ok(mut slot) = LAST_SET_HEIGHT.lock() {
+                *slot = target;
+            }
+            let _ = w.set_size(tauri::LogicalSize::new(size.width as f64 / scale, target));
+        }
+    });
 }
 
 /// The preset currently owning the geometry, if any.
@@ -538,11 +590,6 @@ static MANAGED_PRESET_WIDTH: std::sync::Mutex<Option<f64>> = std::sync::Mutex::n
 /// How far the width may drift before the preset concludes the user has taken
 /// over and stops managing it.
 const PRESET_WIDTH_TOLERANCE: f64 = 12.0;
-/// A height the active preset refuses to shrink below. Tall means tall — its
-/// button promises "room to breathe" — but the renderer's fit pass measures
-/// the content and asks to collapse back to it, which made tall land at
-/// exactly the height you get with no preset at all.
-static PRESET_MIN_HEIGHT: std::sync::Mutex<Option<f64>> = std::sync::Mutex::new(None);
 
 fn set_active_preset(preset: Option<String>) {
     let clearing = preset.is_none();
@@ -554,9 +601,6 @@ fn set_active_preset(preset: Option<String>) {
     // survived into compact mode and blocked its resize — the same shape of
     // bug as every other one in this file's history.
     if clearing {
-        if let Ok(mut slot) = PRESET_MIN_HEIGHT.lock() {
-            *slot = None;
-        }
         if let Ok(mut slot) = MANAGED_PRESET_WIDTH.lock() {
             *slot = None;
         }

@@ -551,22 +551,25 @@ function setupEventListeners() {
     // auto-sized widget.
     if (elements.wideBtn) {
         elements.wideBtn.addEventListener('click', () => {
-            const goWide = _activePreset !== 'wide';
-            _activePreset = goWide ? 'wide' : null;
-            window.electronAPI.applyWindowPreset(goWide ? 'wide' : 'reset');
-            elements.wideBtn.classList.toggle('active', goWide);
+            // Clicking the layout you are already in does nothing. Toggling
+            // back to the auto-sized widget re-ran the whole fit cascade and
+            // read as the window randomly changing size under you.
+            if (_activePreset === 'wide') return;
+            _activePreset = 'wide';
+            window.electronAPI.applyWindowPreset('wide');
+            elements.wideBtn.classList.add('active');
             if (elements.tallBtn) elements.tallBtn.classList.remove('active');
             _fitPresetHeight();
             _fitWidePresetWithGraph();
-            if (goWide) setTimeout(syncLandscapeCliWidth, 180);
+            setTimeout(syncLandscapeCliWidth, 180);
         });
     }
     if (elements.tallBtn) {
         elements.tallBtn.addEventListener('click', () => {
-            const goTall = _activePreset !== 'tall';
-            _activePreset = goTall ? 'tall' : null;
-            window.electronAPI.applyWindowPreset(goTall ? 'tall' : 'reset');
-            elements.tallBtn.classList.toggle('active', goTall);
+            if (_activePreset === 'tall') return;
+            _activePreset = 'tall';
+            window.electronAPI.applyWindowPreset('tall');
+            elements.tallBtn.classList.add('active');
             if (elements.wideBtn) elements.wideBtn.classList.remove('active');
             _fitPresetHeight();
         });
