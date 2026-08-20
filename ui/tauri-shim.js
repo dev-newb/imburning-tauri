@@ -239,6 +239,10 @@
     if (target.closest(NO_DRAG_SELECTORS)) return;
     // A double-click on the caption area is a maximise gesture, not a drag.
     if (e.detail > 1) return;
+    // Stop the drag from also starting a text selection. Electron got this
+    // free from -webkit-app-region: drag; here the mousedown is ours, so the
+    // suppression has to be too.
+    e.preventDefault();
     try {
       await window.__TAURI__.window.getCurrentWindow().startDragging();
     } catch (err) {

@@ -3391,6 +3391,25 @@ body.lbl-code .usage-bar-group { justify-content: center; }
    and the fifth wrapped onto its own line at the far left. Drop it too. */
 body.sz4 .usage-headers > :last-child { display: none; }
 
+/* ---- Chrome is not selectable text -----------------------------------------
+   Dragging the window used to select the glyphs inside the caption buttons —
+   the minimise "−" and close "×" are text nodes, so WebKit highlighted them
+   and they appeared to have a bright blue background. (The wide/tall buttons
+   are SVG, which is why only two of the four ever lit up.) Electron never
+   showed this because -webkit-app-region: drag suppresses selection natively;
+   the Tauri build drags via a JS mousedown handler, which does not.
+   Selection stays available in the content rows, where copying a figure is a
+   reasonable thing to want. */
+.title-bar,
+.title-caption,
+.caption-btn,
+.control-btn,
+.preset-btn,
+.bottom-bar {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
 /* ---- WebKit focus rings on the control buttons -----------------------------
    WebKit draws a native, accent-coloured focus ring on a <button> that still
    holds focus after a click. On the small caption buttons that ring fills the
