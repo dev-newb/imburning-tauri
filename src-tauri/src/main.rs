@@ -250,18 +250,27 @@ fn resize_window(
 /// from a hand-resize. Electron tracked the same thing as `_lastSetHeight`.
 static LAST_SET_HEIGHT: std::sync::Mutex<f64> = std::sync::Mutex::new(0.0);
 
-/// True once the live height no longer matches what we last set — i.e. the
-/// user dragged the frame. Zero means we have not sized it yet, so nothing has
-/// been overridden.
+/// Whether the window's geometry belongs to the user (or to a preset) rather
+/// than to the auto-fit loop. Mirrors Electron's windowIsUserSized, including
+/// its 24px tolerance — 4px was tight enough to trip on scale-factor rounding.
 fn window_is_user_sized(window: &tauri::Window) -> bool {
-    let expected = LAST_SET_HEIGHT.lock().map(|h| *h).unwrap_or(0.0);
-    if expected <= 0.0 {
+    // A named preset owns its geometry until switched off. Especially matters
+    // for tall: on a shorter display its clamped height can resemble the last
+    // auto-fit height, and the renderer would fight every vertical resize.
+    if ACTIVE_PRESET.lock().map(|p| p.is_some()).unwrap_or(false) {
+        return true;
+    }
+    let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) else {
         return false;
+    };
+    let logical_w = size.width as f64 / scale;
+    let logical_h = size.height as f64 / scale;
+    let expected_w = EXPECTED_WIDTH.lock().map(|w| *w).unwrap_or(590.0);
+    if (logical_w - expected_w).abs() > 24.0 {
+        return true;
     }
-    match (window.inner_size(), window.scale_factor()) {
-        (Ok(size), Ok(scale)) => ((size.height as f64 / scale) - expected).abs() > 4.0,
-        _ => false,
-    }
+    let expected_h = LAST_SET_HEIGHT.lock().map(|h| *h).unwrap_or(0.0);
+    expected_h > 0.0 && (logical_h - expected_h).abs() > 24.0
 }
 
 #[tauri::command]
@@ -271,6 +280,7 @@ fn fit_landscape_width(window: tauri::Window, width: f64) {
     }
     if let Ok(size) = window.inner_size() {
         let scale = window.scale_factor().unwrap_or(1.0);
+        set_expected_width(width);
         let _ = window.set_size(tauri::LogicalSize::new(width, size.height as f64 / scale));
     }
 }
@@ -337,17 +347,22 @@ fn set_min_height(window: tauri::Window, height: f64) {
     let _ = window.set_min_size(Some(tauri::LogicalSize::new(290.0, height)));
 }
 
-/// Wide / tall window presets. Sizes and the clamp-to-work-area behaviour
-/// mirror the Electron handler; "reset" returns to the auto-sized widget and
-/// clears the tracker so the renderer resumes auto-height.
+/// Wide / tall window presets.
+///
+/// A named preset OWNS the window geometry until the user turns it off. That
+/// is what `window_is_user_sized` reports while one is active, and without it
+/// the renderer's auto-fit immediately measures its content and resizes back —
+/// the window visibly snaps to the preset and returns, which reads as a
+/// flicker, and the wide preset never survives long enough to reflow into
+/// columns (it just looks like a warped tall).
 #[tauri::command]
 fn apply_window_preset(window: tauri::Window, preset: String) {
     const WIDGET_WIDTH: f64 = 590.0;
     const WIDGET_HEIGHT: f64 = 155.0;
-    const WIDE_WIDTH: f64 = 1000.0;
+    const WIDE_PRESET_WIDTH: f64 = 900.0;
 
     let (mut width, mut height) = match preset.as_str() {
-        "wide" => (WIDE_WIDTH, 600.0),
+        "wide" => (WIDE_PRESET_WIDTH, 600.0),
         "tall" => (WIDGET_WIDTH, 1150.0),
         "reset" => (WIDGET_WIDTH, WIDGET_HEIGHT),
         _ => return,
@@ -360,12 +375,34 @@ fn apply_window_preset(window: tauri::Window, preset: String) {
         width = width.min(size.width as f64 / scale);
         height = height.min(size.height as f64 / scale);
     }
+
+    if preset == "reset" {
+        set_active_preset(None);
+        set_expected_width(WIDGET_WIDTH);
+        if let Ok(mut slot) = LAST_SET_HEIGHT.lock() {
+            *slot = height; // trackers match again, so auto-fit resumes
+        }
+    } else {
+        set_active_preset(Some(preset.clone()));
+        set_expected_width(width);
+    }
     let _ = window.set_size(tauri::LogicalSize::new(width, height));
-    if let Ok(mut slot) = LAST_SET_HEIGHT.lock() {
-        // On reset the tracker matches the window again, so windowIsUserSized
-        // reads false and auto-height resumes; a preset deliberately leaves a
-        // mismatch, which is what makes the renderer's reflow engage.
-        *slot = if preset == "reset" { height } else { 0.0 };
+}
+
+/// The preset currently owning the geometry, if any.
+static ACTIVE_PRESET: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+/// The width the backend intends the window to have.
+static EXPECTED_WIDTH: std::sync::Mutex<f64> = std::sync::Mutex::new(590.0);
+
+fn set_active_preset(preset: Option<String>) {
+    if let Ok(mut slot) = ACTIVE_PRESET.lock() {
+        *slot = preset;
+    }
+}
+
+fn set_expected_width(width: f64) {
+    if let Ok(mut slot) = EXPECTED_WIDTH.lock() {
+        *slot = width;
     }
 }
 
@@ -728,6 +765,11 @@ fn main() {
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_secs(15)).await;
                     let Some(window) = handle.get_webview_window("main") else { return };
+                    let custom = std::env::var("IMBURNING_DEV_EVAL").ok();
+                    if let Some(expr) = custom {
+                        let _ = window.eval_with_callback(expr, |r| dev_log(&format!("eval: {}", r)));
+                        return;
+                    }
                     let js = r#"JSON.stringify({
                         title: document.title,
                         google: [...document.querySelectorAll('#googleRows > *')].map(r => r.textContent.replace(/\s+/g,' ').trim()).filter(Boolean),

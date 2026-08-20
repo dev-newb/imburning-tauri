@@ -3390,3 +3390,18 @@ body.lbl-code .usage-bar-group { justify-content: center; }
    .col-header, so the header kept five children against a four-column grid
    and the fifth wrapped onto its own line at the far left. Drop it too. */
 body.sz4 .usage-headers > :last-child { display: none; }
+
+/* ---- WebKit focus rings on the control buttons -----------------------------
+   WebKit draws a native, accent-coloured focus ring on a <button> that still
+   holds focus after a click. On the small caption buttons that ring fills the
+   whole control and reads as a bright blue background. Chromium does not do
+   this, which is why it only showed up in the Tauri build — the stylesheet is
+   shared, so the fix belongs here rather than in a fork of it.
+   Keyboard users keep their ring: :focus-visible is unaffected. */
+button:focus:not(:focus-visible) { outline: none; }
+.caption-btn,
+.control-btn,
+.preset-btn {
+    -webkit-appearance: none;
+    appearance: none;
+}
