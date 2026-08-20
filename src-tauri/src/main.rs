@@ -222,11 +222,32 @@ fn resize_window(
     user_action: Option<bool>,
 ) {
     let deliberate = fit_preset.unwrap_or(false) || user_action.unwrap_or(false);
+    let traced = window_is_user_sized(&window);
+    dev_log(&format!(
+        "  resize(h={:.0} force={} fitPreset={} userAction={}) userSized={}",
+        height, force.unwrap_or(false), fit_preset.unwrap_or(false),
+        user_action.unwrap_or(false), traced
+    ));
     if force.unwrap_or(false) && !deliberate && window_is_user_sized(&window) {
         return;
     }
     if !force.unwrap_or(false) && window_is_user_sized(&window) {
         return;
+    }
+    // Damp the settle jitter. While a preset is active two renderer passes
+    // disagree by a few pixels — _fitPresetHeight wants one height,
+    // _fitWidePresetWithGraph another, and the latter calls through with no
+    // delta guard of its own — so they alternate for about 700ms and the
+    // window visibly buzzes. Anything under the renderer's own 12px shrink
+    // tolerance is not a real layout change.
+    if ACTIVE_PRESET.lock().map(|p| p.is_some()).unwrap_or(false) {
+        if let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) {
+            let current = size.height as f64 / scale;
+            if (height - current).abs() <= 12.0 {
+                dev_log("  (damped: sub-12px preset jitter)");
+                return;
+            }
+        }
     }
     if let Ok(size) = window.inner_size() {
         let scale = window.scale_factor().unwrap_or(1.0);
@@ -254,17 +275,21 @@ static LAST_SET_HEIGHT: std::sync::Mutex<f64> = std::sync::Mutex::new(0.0);
 /// than to the auto-fit loop. Mirrors Electron's windowIsUserSized, including
 /// its 24px tolerance — 4px was tight enough to trip on scale-factor rounding.
 fn window_is_user_sized(window: &tauri::Window) -> bool {
+    let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) else {
+        return false;
+    };
+    geometry_is_user_sized(size.width as f64 / scale, size.height as f64 / scale)
+}
+
+/// The predicate itself, over plain logical dimensions — the resize guard has a
+/// Window and the resize listener a WebviewWindow, and both must agree.
+fn geometry_is_user_sized(logical_w: f64, logical_h: f64) -> bool {
     // A named preset owns its geometry until switched off. Especially matters
     // for tall: on a shorter display its clamped height can resemble the last
     // auto-fit height, and the renderer would fight every vertical resize.
     if ACTIVE_PRESET.lock().map(|p| p.is_some()).unwrap_or(false) {
         return true;
     }
-    let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) else {
-        return false;
-    };
-    let logical_w = size.width as f64 / scale;
-    let logical_h = size.height as f64 / scale;
     let expected_w = EXPECTED_WIDTH.lock().map(|w| *w).unwrap_or(590.0);
     if (logical_w - expected_w).abs() > 24.0 {
         return true;
@@ -317,18 +342,63 @@ fn set_always_on_top(window: tauri::Window, flag: bool) {
     let _ = window.set_always_on_top(flag);
 }
 
-/// Compact mode needs a narrower window than the normal minimum allows, so the
-/// floor moves with the mode — otherwise the renderer asks for compact
-/// geometry and the OS clamps it back to the normal-mode minimum, leaving the
-/// widget stuck at a size its compact layout was never drawn for.
+/// Compact mode. Ported from the Electron handler rather than improvised,
+/// because the improvised version got four things wrong at once — most
+/// visibly, leaving compact kept whatever height was current, so coming back
+/// from the wide preset produced a narrow window still at wide's height with
+/// the Google section cut off.
+///
+/// Entering or leaving compact CLEARS any active preset: the two are different
+/// answers to the same question, and letting a preset survive means its
+/// geometry ownership fights whatever compact just set.
 #[tauri::command]
-fn set_compact_mode(window: tauri::Window, compact: bool) {
-    let (min_w, min_h, width) = if compact { (280.0, 90.0, 320.0) } else { (290.0, 180.0, 590.0) };
-    let _ = window.set_min_size(Some(tauri::LogicalSize::new(min_w, min_h)));
-    if let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) {
-        let _ = window.set_size(tauri::LogicalSize::new(width, size.height as f64 / scale));
+fn set_compact_mode(window: tauri::Window, state: State<'_, std::sync::Arc<AppState>>, compact: bool) {
+    const WIDGET_WIDTH: f64 = 590.0;
+    const WIDGET_HEIGHT: f64 = 155.0;
+    const MIN_WIDGET_WIDTH: f64 = 290.0;
+
+    set_active_preset(None);
+
+    let width = if compact { 320.0 } else { WIDGET_WIDTH };
+    set_expected_width(width);
+
+    // A lower floor for compact, or the 180px portrait minimum clamps its
+    // short window and leaves empty space. The renderer then fits the exact
+    // pool count on top of this.
+    let _ = window.set_min_size(Some(tauri::LogicalSize::new(
+        MIN_WIDGET_WIDTH,
+        if compact { 80.0 } else { 180.0 },
+    )));
+
+    // Compact grows by one slim row per scoped weekly limit (e.g. Fable).
+    let scoped = if compact { scoped_weekly_count(&state.store) } else { 0 };
+    let height = if compact { 105.0 + (scoped as f64 * 26.0) } else { WIDGET_HEIGHT };
+
+    dev_log(&format!("  compact({}) -> {:.0}x{:.0}", compact, width, height));
+    let _ = window.set_size(tauri::LogicalSize::new(width, height));
+    if let Ok(mut slot) = LAST_SET_HEIGHT.lock() {
+        *slot = height; // trackers line up, so auto-fit takes it from here
     }
     COMPACT.store(compact, std::sync::atomic::Ordering::Relaxed);
+    let _ = window.emit("window-user-sized", false);
+}
+
+/// Scoped weekly pools (Fable and friends) in the last payload.
+fn scoped_weekly_count(store: &Store) -> usize {
+    store
+        .get_or("latestUsageData", json!({}))
+        .get("limits")
+        .and_then(|l| l.as_array())
+        .map(|limits| {
+            limits
+                .iter()
+                .filter(|l| {
+                    l.get("kind").and_then(|k| k.as_str()) == Some("weekly_scoped")
+                        && l.get("percent").map(|p| !p.is_null()).unwrap_or(false)
+                })
+                .count()
+        })
+        .unwrap_or(0)
 }
 
 static COMPACT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -386,7 +456,12 @@ fn apply_window_preset(window: tauri::Window, preset: String) {
         set_active_preset(Some(preset.clone()));
         set_expected_width(width);
     }
+    dev_log(&format!("  preset({}) -> {:.0}x{:.0}", preset, width, height));
     let _ = window.set_size(tauri::LogicalSize::new(width, height));
+    // Announce the new ownership at once. The renderer keys `landscape` off
+    // this, and waiting for the debounced resize event to say the same thing
+    // is a race the layout should not depend on.
+    let _ = window.emit("window-user-sized", preset != "reset");
 }
 
 /// The preset currently owning the geometry, if any.
@@ -738,12 +813,19 @@ fn main() {
                         if pending.load(std::sync::atomic::Ordering::Relaxed) != seq {
                             return;
                         }
+                        // MUST be the same predicate the resize guard uses.
+                        // The renderer gates its whole responsive layer on this
+                        // value — `landscape` is `_windowUserSized && w > h &&
+                        // w >= 760` — so a second, subtly different definition
+                        // here meant the renderer never learned a preset was
+                        // active: wide never reflowed into columns and tall's
+                        // content never adapted, so both were fitted straight
+                        // back to the default height.
                         let user_sized = match (emitter.inner_size(), emitter.scale_factor()) {
-                            (Ok(size), Ok(scale)) => {
-                                let logical = size.height as f64 / scale;
-                                let expected = LAST_SET_HEIGHT.lock().map(|h| *h).unwrap_or(0.0);
-                                expected > 0.0 && (logical - expected).abs() > 4.0
-                            }
+                            (Ok(size), Ok(scale)) => geometry_is_user_sized(
+                                size.width as f64 / scale,
+                                size.height as f64 / scale,
+                            ),
                             _ => false,
                         };
                         let _ = emitter.emit("window-user-sized", user_sized);
@@ -755,6 +837,36 @@ fn main() {
             // login window. A 401 here is a PASS — it proves the webview
             // reached the real API and got a real status, rather than a
             // challenge page or a timeout.
+            // Geometry tracer for hand-testing. Logs every size change the
+            // window actually undergoes, sampled from the HOST side. It has to
+            // be run with the window VISIBLE: the renderer's auto-fit only runs
+            // while the window is rendered, so a trace taken from an off-Space
+            // window says nothing about the behaviour under investigation.
+            if std::env::var("IMBURNING_DEV_TRACE").as_deref() == Ok("1") {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                    let Some(w) = handle.get_webview_window("main") else { return };
+                    let start = std::time::Instant::now();
+                    let mut last = String::new();
+                    for _ in 0..1800 {
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        if let (Ok(size), Ok(scale)) = (w.inner_size(), w.scale_factor()) {
+                            let now = format!(
+                                "{}x{}",
+                                (size.width as f64 / scale).round() as i64,
+                                (size.height as f64 / scale).round() as i64
+                            );
+                            if now != last {
+                                dev_log(&format!("trace t={:>6}ms  {}", start.elapsed().as_millis(), now));
+                                last = now;
+                            }
+                        }
+                    }
+                    dev_log("trace: finished");
+                });
+            }
+
             // Pull the rendered DOM from the host side rather than having the
             // page push it on a timer. A window on another Space is not
             // rendered, and WebKit throttles its timers to a standstill — so a
@@ -768,6 +880,19 @@ fn main() {
                     let custom = std::env::var("IMBURNING_DEV_EVAL").ok();
                     if let Some(expr) = custom {
                         let _ = window.eval_with_callback(expr, |r| dev_log(&format!("eval: {}", r)));
+                        return;
+                    }
+                    if let Ok(expr) = std::env::var("IMBURNING_DEV_EVAL") {
+                        let _ = window.eval_with_callback(expr, |r| dev_log(&format!("eval: {}", r)));
+                        // Read back whatever the expression parked on window.__st,
+                        // once it has had time to settle.
+                        let w = window.clone();
+                        tauri::async_runtime::spawn(async move {
+                            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                            let _ = w.eval_with_callback("window.__st||''", |r| {
+                                dev_log(&format!("state: {}", r))
+                            });
+                        });
                         return;
                     }
                     let js = r#"JSON.stringify({
