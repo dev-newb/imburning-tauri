@@ -205,27 +205,30 @@ pub fn delete_session_key() {
         .status();
 }
 
-/// Open the claude.ai login page and wait for the session cookie to appear.
-/// The window is the user's to interact with — SSO, 2FA, whatever their
-/// account needs — so this polls rather than automating anything.
+/// Sign in to claude.ai.
+///
+/// The cookie jar is shared with the hidden fetch webview, so a session may
+/// already be sitting there — from a previous run, or simply because the user
+/// is signed in. The question that matters is not "did a cookie appear" but
+/// "does the session WORK", so that is what this asks.
+///
+/// Both earlier attempts got this wrong from opposite directions: the first
+/// accepted any cookie it found, so the window flashed open and shut using a
+/// stale key; the second demanded the value CHANGE, so an already-signed-in
+/// user waited forever at a logged-in Claude page for a sign-in that was
+/// never going to happen.
 pub async fn login(app: &AppHandle) -> Value {
+    // Already signed in? Take it, and never show a window at all.
+    if let Some(result) = try_existing_session(app).await {
+        return result;
+    }
+
     if app.get_webview_window(LOGIN_WEBVIEW).is_some() {
         return json!({ "success": false, "error": "A sign-in is already in progress" });
     }
     let Ok(url) = LOGIN_URL.parse() else {
         return json!({ "success": false, "error": "bad login url" });
     };
-    // Snapshot any sessionKey already in the shared cookie jar BEFORE opening
-    // the window. The fetch webview and previous sessions leave one there, and
-    // without this the login window opens, immediately sees that stale cookie,
-    // declares victory and closes again — which looks exactly like the window
-    // flashing open and vanishing. Electron deletes the cookie at this point;
-    // Tauri has no delete API, so instead we insist on a value that CHANGED.
-    let baseline = app
-        .get_webview_window(FETCH_WEBVIEW)
-        .or_else(|| app.get_webview_window("main"))
-        .and_then(|w| session_key_from(&w));
-
     let window = match WebviewWindowBuilder::new(app, LOGIN_WEBVIEW, WebviewUrl::External(url))
         .title("Claude Login — claude.ai")
         .inner_size(1000.0, 700.0)
@@ -235,43 +238,74 @@ pub async fn login(app: &AppHandle) -> Value {
         Err(e) => return json!({ "success": false, "error": e.to_string() }),
     };
 
-    // Poll for the cookie until it appears or the user gives up and closes the
-    // window. Five minutes is generous enough for an SSO round trip.
+    // Poll until the session works. Five minutes is generous enough for an
+    // SSO round trip; the user closing the window ends it sooner.
     let deadline = Instant::now() + Duration::from_secs(300);
-    let key = loop {
+    loop {
         if app.get_webview_window(LOGIN_WEBVIEW).is_none() {
-            return json!({ "success": false, "error": "Login window closed" });
-        }
-        if let Some(key) = session_key_from(&window) {
-            // Only a NEW key means the user actually signed in just now.
-            if baseline.as_deref() != Some(key.as_str()) {
-                break key;
-            }
+            // They may well have signed in and then closed it themselves.
+            return try_existing_session(app)
+                .await
+                .unwrap_or_else(|| json!({ "success": false, "error": "Login window closed" }));
         }
         if Instant::now() > deadline {
             let _ = window.close();
             return json!({ "success": false, "error": "Login timed out" });
         }
-        tokio::time::sleep(Duration::from_millis(750)).await;
-    };
-    let _ = window.close();
+        tokio::time::sleep(Duration::from_secs(2)).await;
 
-    if let Err(e) = store_session_key(&key) {
-        return json!({ "success": false, "error": e });
-    }
-
-    // Validate by listing organizations — also how the account's default org
-    // is chosen, which every later usage call needs.
-    match fetch_via_webview(app, "https://claude.ai/api/organizations").await {
-        Ok(orgs) => match pick_organization(&orgs) {
-            Some((id, list)) => json!({ "success": true, "organizationId": id, "organizations": list }),
-            None => json!({ "success": false, "error": "No chat-enabled organizations found" }),
-        },
-        Err(e) => {
-            crate::log_error(&format!("anthropic login: {}", e));
-            json!({ "success": false, "error": e })
+        if session_key_from(&window).is_none() {
+            continue; // nothing to validate yet
+        }
+        if let Some(result) = try_existing_session(app).await {
+            let _ = window.close();
+            return result;
         }
     }
+}
+
+/// Ask the API whether the session in the shared cookie jar is usable. Some on
+/// success (with the account's organizations), None if it is not signed in.
+async fn try_existing_session(app: &AppHandle) -> Option<Value> {
+    let orgs = fetch_via_webview(app, "https://claude.ai/api/organizations")
+        .await
+        .ok()?;
+    let (id, list) = pick_organization(&orgs)?;
+
+    // Keep the key so "are we logged in" can be answered without a round trip.
+    if let Some(window) = app
+        .get_webview_window(FETCH_WEBVIEW)
+        .or_else(|| app.get_webview_window(LOGIN_WEBVIEW))
+    {
+        if let Some(key) = session_key_from(&window) {
+            let _ = store_session_key(&key);
+        }
+    }
+    Some(json!({ "success": true, "organizationId": id, "organizations": list }))
+}
+
+/// Cache the cookie jar's current session key, so "are we logged in" can be
+/// answered without a network round trip. Called after any successful fetch:
+/// the jar is the real source of truth, this is only a note about it.
+pub fn remember_session(app: &AppHandle) {
+    if let Some(window) = app
+        .get_webview_window(FETCH_WEBVIEW)
+        .or_else(|| app.get_webview_window("main"))
+    {
+        if let Some(key) = session_key_from(&window) {
+            let _ = store_session_key(&key);
+        }
+    }
+}
+
+/// Is the stored session still usable? The organizations endpoint is the
+/// cheapest thing that answers it, and it is the same call the login uses.
+pub async fn session_is_valid(app: &AppHandle) -> bool {
+    fetch_via_webview(app, "https://claude.ai/api/organizations")
+        .await
+        .ok()
+        .and_then(|orgs| pick_organization(&orgs))
+        .is_some()
 }
 
 /// Chat-capable orgs only (API-only orgs report no usage), preferring a team

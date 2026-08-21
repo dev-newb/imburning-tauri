@@ -106,13 +106,31 @@ pub async fn fetch_all(
         app,
         store.get("organizationId").and_then(|v| v.as_str().map(String::from)),
     ) {
-        if crate::anthropic::read_session_key().is_some() {
+        // NOT gated on the stored session key. The request rides the webview's
+        // cookie jar — the key is only a cached answer to "are we logged in",
+        // and gating on it meant one transient failure that cleared the cache
+        // permanently disabled a working login.
+        {
             match crate::anthropic::fetch_usage(app, &org).await {
-                Ok(v) => web_usage = Some(v),
+                Ok(v) => {
+                    // A success is also the best moment to refresh the cache.
+                    crate::anthropic::remember_session(app);
+                    web_usage = Some(v)
+                }
                 Err(e) => {
-                    // An explicit auth failure means the session died; drop it so
-                    // the UI offers a re-login instead of showing stale numbers.
-                    if e.starts_with("AuthFailure") {
+                    // Every failure gets recorded. Swallowing the non-auth ones
+                    // meant a broken fetch was indistinguishable from having no
+                    // login at all — the section just read "none".
+                    crate::log_error(&format!("anthropic usage fetch: {}", e));
+                    // A 401/403 from ONE endpoint does not prove the session is
+                    // dead — the usage endpoint can refuse for reasons of its
+                    // own. Deleting the key on that basis threw away a working
+                    // login and left the section permanently empty. Ask the
+                    // session probe instead, and only then give up on it.
+                    if e.starts_with("AuthFailure")
+                        && !crate::anthropic::session_is_valid(app).await
+                    {
+                        crate::log_error("anthropic: session confirmed dead, clearing");
                         crate::anthropic::delete_session_key();
                         let _ = app.emit("session-expired", ());
                     }
