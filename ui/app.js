@@ -2301,7 +2301,12 @@ function applySqueezeClasses() {
 
     // Landscape: wider than tall with room for three columns — the provider
     // sections sit side by side and every width band keys on COLUMN width
-    const landscape = on && w > h && w >= 760;
+    // Purely geometric in this build. Nothing in the app ever makes the
+    // window wider-than-tall at >=760px except the wide preset or the user's
+    // own drag, so gating this on the user-sized EVENT added nothing except a
+    // failure mode: whenever that event lagged or was missed, a wide window
+    // rendered the stacked portrait layout centered in acres of empty margin.
+    const landscape = w > h && w >= 760;
     if (window._lastLandscapeMin !== landscape) {
         window._lastLandscapeMin = landscape;
         if (window.electronAPI.setMinHeight) window.electronAPI.setMinHeight(landscape ? 340 : 180);
