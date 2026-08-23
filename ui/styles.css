@@ -2416,7 +2416,7 @@ body.landscape:not(.compact-mode) .content {
     align-items: start;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 0 10px;
+    padding: 10px 10px 0;
 }
 
 body.landscape.graph-off:not(.compact-mode) .content {
@@ -2890,6 +2890,26 @@ body.theme-light .dual-pair .dual-pct { color: #1a1a2e; }
 
 /* Remaining-time pies inside the pair trios */
 .pie-cell { font-size: 0 !important; display: flex; justify-content: center; }
+/* The pie is a fixed-size flex item, and a flex item's default flex-shrink
+   lets a tight column squash its WIDTH while the height stays put — an oval.
+   WebKit sizes the trio columns slightly narrower than Chromium, which is why
+   only the Tauri build showed it, but round is correct in both engines. */
+.pie-cell::before,
+.timer-text:not(.extra-balance-label)::before {
+    flex-shrink: 0;
+}
+/* font-size: 0 hides the glyphs but does NOT zero letter-spacing — each
+   hidden character still pays its 0.5px of tracking, so rows with longer
+   reset strings pushed their pie further off-centre and every row's pie sat
+   at a slightly different x. (Same trap as the label alignment fix earlier
+   in this file's history; it is worth knowing this pattern by name.) */
+body.sz3 .timer-text:not(.extra-balance-label),
+body.landscape.dual-compact #sgAnthropicCli .timer-text:not(.extra-balance-label),
+body.landscape.dual-compact #sgOpenaiCli .timer-text:not(.extra-balance-label),
+body.landscape.dual-compact #sgGoogleCli .timer-text:not(.extra-balance-label),
+.pie-cell {
+    letter-spacing: 0 !important;
+}
 .pie-cell::before {
     content: '';
     width: 18px;
