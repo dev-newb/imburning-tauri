@@ -362,16 +362,9 @@ body.theme-light .graph-btn.active {
     white-space: nowrap;
 }
 
-/* Portrait/tall: the At column is the row's right edge, so its TEXT (not just
-   its grid track) must sit flush right — centring left ~15px of dead space
-   inside the column, which read as extra right margin next to the flush-left
-   labels. Landscape keeps centred columns. Header follows the values. */
-body:not(.landscape) .usage-section > .resets-at-text {
-    text-align: right;
-}
-body:not(.landscape) .usage-headers .col-header:last-child {
-    text-align: right;
-}
+/* The At column stays CENTRED under its header — values sit on the header's
+   centreline like every other column. (A flush-right variant was tried and
+   rejected; the symmetric row padding alone fixes the right-margin width.) */
 
 .usage-section:last-of-type {
     margin-bottom: 0;
