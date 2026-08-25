@@ -2482,21 +2482,37 @@ body.sz4 .usage-section, body.sz4 .usage-headers { padding-right: 4px; }
 /* The clown lives in the content's top-right corner now */
 .content { position: relative; }
 
-/* In compressed bands the stretch rows (credits / reset orbs) span the whole
-   remaining row width, so the orbs centre across the window instead of
-   huddling inside the narrow fixed columns */
-body.sz1 .usage-section.stretch-bar,
-body.lbl-code .usage-section.stretch-bar,
-body.sz3 .usage-section.stretch-bar,
-body.sz4 .usage-section.stretch-bar {
-    grid-template-columns: minmax(46px, auto) 1fr;
-}
-
+/* Credit / reset-orb rows keep the SAME column grid as the data rows in
+   landscape (no grid-template override — the per-band `.usage-section` rule
+   already sets the right 5-track columns, and matching it is the point). The
+   count / orbs then sit centred under the Used column, in line with the %
+   values above, instead of floating centred across the whole row. The orbs
+   keep their natural size (flex:0 0 auto) so a lone reset centres cleanly and
+   a rare full bank overflows the column symmetrically rather than shrinking. */
 body.sz1 .usage-section.stretch-bar .usage-bar-group,
 body.lbl-code .usage-section.stretch-bar .usage-bar-group,
 body.sz3 .usage-section.stretch-bar .usage-bar-group,
 body.sz4 .usage-section.stretch-bar .usage-bar-group {
-    grid-column: 2 / -1;
+    grid-column: 2 / 3;
+    justify-content: center;
+    overflow: visible;
+}
+
+body.sz1 .usage-section.stretch-bar .reset-dots,
+body.lbl-code .usage-section.stretch-bar .reset-dots,
+body.sz3 .usage-section.stretch-bar .reset-dots,
+body.sz4 .usage-section.stretch-bar .reset-dots {
+    flex: 0 0 auto;
+    justify-content: center;
+    gap: 6px;
+    padding: 0;
+}
+body.sz1 .usage-section.stretch-bar .credits-approx,
+body.lbl-code .usage-section.stretch-bar .credits-approx,
+body.sz3 .usage-section.stretch-bar .credits-approx,
+body.sz4 .usage-section.stretch-bar .credits-approx {
+    flex: 0 0 auto;
+    text-align: center;
 }
 
 

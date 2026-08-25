@@ -1027,15 +1027,13 @@ fn main() {
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_secs(15)).await;
                     let Some(window) = handle.get_webview_window("main") else { return };
-                    let custom = std::env::var("IMBURNING_DEV_EVAL").ok();
-                    if let Some(expr) = custom {
-                        let _ = window.eval_with_callback(expr, |r| dev_log(&format!("eval: {}", r)));
-                        return;
-                    }
                     if let Ok(expr) = std::env::var("IMBURNING_DEV_EVAL") {
                         let _ = window.eval_with_callback(expr, |r| dev_log(&format!("eval: {}", r)));
-                        // Read back whatever the expression parked on window.__st,
-                        // once it has had time to settle.
+                        // Always read back whatever the expression parked on
+                        // window.__st once it has had time to settle. The expr
+                        // can kick off an async change (e.g. click a preset and
+                        // measure after the resize reflows), which the eval's
+                        // own synchronous return value cannot capture.
                         let w = window.clone();
                         tauri::async_runtime::spawn(async move {
                             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
