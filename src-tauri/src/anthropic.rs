@@ -341,6 +341,30 @@ pub fn pick_organization(orgs: &Value) -> Option<(String, Value)> {
 /// as its own rows. The extras are fetched separately and never allowed to
 /// fail the whole call — a missing credits endpoint must not suppress valid
 /// usage, which is how the Electron build orders it too.
+/// The signed-in account's email, from claude.ai's own account endpoint.
+/// Cached for the process; display only.
+pub async fn account_email(app: &AppHandle) -> Option<String> {
+    use std::sync::Mutex;
+    static CACHE: Mutex<Option<String>> = Mutex::new(None);
+    if let Ok(c) = CACHE.lock() {
+        if c.is_some() {
+            return c.clone();
+        }
+    }
+    let acct = fetch_via_webview(app, "https://claude.ai/api/account").await.ok()?;
+    // The email sits under a couple of shapes across API versions; try both.
+    let email = acct
+        .get("email_address")
+        .or_else(|| acct.get("email"))
+        .or_else(|| acct.get("account").and_then(|a| a.get("email_address")))
+        .and_then(|v| v.as_str())
+        .map(String::from)?;
+    if let Ok(mut c) = CACHE.lock() {
+        *c = Some(email.clone());
+    }
+    Some(email)
+}
+
 pub async fn fetch_usage(app: &AppHandle, org_id: &str) -> Result<Value, String> {
     let base = format!("https://claude.ai/api/organizations/{}", org_id);
     let mut usage = fetch_via_webview(app, &format!("{}/usage", base)).await?;

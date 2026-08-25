@@ -183,6 +183,8 @@
                             <svg class="eye-closed" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                         </button>
                         <span class="ice-wrap"><span class="section-name brand-anthropic" data-ice="Anthropic">Anthropic</span></span>
+                    
+                        <span class="account-email" id="emailAnthropic" title="Account signed in for this provider"><span class="account-email-text"></span><button class="account-email-hide" title="Hide account emails">–</button></span>
                     </div>
                     <div class="section-body" id="bodyAnthropic">
                         <div class="usage-headers section-col-headers">
@@ -282,6 +284,8 @@
                             <svg class="eye-closed" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                         </button>
                         <span class="ice-wrap"><span class="section-name brand-openai" data-ice="OpenAI">OpenAI</span></span>
+                    
+                        <span class="account-email" id="emailOpenai" title="Account signed in for this provider"><span class="account-email-text"></span><button class="account-email-hide" title="Hide account emails">–</button></span>
                     </div>
                     <div class="section-body" id="bodyOpenai">
                         <div class="connect-row" id="connectRowOpenai" style="display: none;">
@@ -332,6 +336,8 @@
                             <svg class="eye-closed" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                         </button>
                         <span class="ice-wrap"><span class="section-name brand-google" data-ice="Google"><span class="g-b">G</span><span class="g-r">o</span><span class="g-y">o</span><span class="g-b">g</span><span class="g-g">l</span><span class="g-r">e</span></span></span>
+                    
+                        <span class="account-email" id="emailGoogle" title="Account signed in for this provider"><span class="account-email-text"></span><button class="account-email-hide" title="Hide account emails">–</button></span>
                     </div>
                     <div class="section-body" id="bodyGoogle">
                         <div class="connect-row" id="connectRowGoogle" style="display: none;">
@@ -462,6 +468,21 @@
                             </div>
                             <div class="sound-filename" id="soundBurnName">Default (fire)</div>
                         </div>
+                        <div class="settings-section-sub">
+                            <div class="settings-row-2col">
+                                <div class="settings-col">
+                                    <span class="settings-row-label" title="Plays when a banked weekly-limit reset lands in your OpenAI account">Banked-reset sound</span>
+                                    <label class="toggle-switch"><input type="checkbox" id="soundBankedToggle"><span class="toggle-slider"></span></label>
+                                </div>
+                                <div class="settings-col sound-controls">
+                                    <input type="range" id="soundBankedVolume" class="sound-vol" min="0" max="100" value="85" title="Volume">
+                                    <button class="sound-btn" id="soundBankedTest" title="Preview">▶</button>
+                                    <button class="sound-btn" id="soundBankedPick" title="Choose an audio file">Choose…</button>
+                                    <button class="sound-btn" id="soundBankedReset" title="Back to the bundled sound">Default</button>
+                                </div>
+                            </div>
+                            <div class="sound-filename" id="soundBankedName">Default (banked reset)</div>
+                        </div>
                         <div class="settings-row-2col">
                             <div class="settings-col"></div>
                             <div class="settings-col"></div>
@@ -568,6 +589,15 @@
                             </div>
                             <div class="settings-col">
                                 <span class="settings-row-hint">Most-used pools rise to the top of each company. Session &amp; Weekly stay pinned.</span>
+                            </div>
+                        </div>
+                        <div class="settings-row-2col">
+                            <div class="settings-col">
+                                <span class="settings-row-label" title="Show the signed-in account email under each provider (wide and tall layouts)">Show account emails</span>
+                                <label class="toggle-switch"><input type="checkbox" id="showAccountEmailsToggle" aria-label="Show account emails"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-col">
+                                <span class="settings-row-hint">The email each provider is signed in as, shown under its header in the wide and tall layouts. Also toggled by the hide pill on the label itself.</span>
                             </div>
                         </div>
 

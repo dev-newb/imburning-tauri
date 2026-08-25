@@ -174,6 +174,7 @@ const elements = {
     webhookUrl: document.getElementById('webhookUrl'),
     dailyDigestToggle: document.getElementById('dailyDigestToggle'),
     sortByUsageToggle: document.getElementById('sortByUsageToggle'),
+    showAccountEmailsToggle: document.getElementById('showAccountEmailsToggle'),
     showCodexToggle: document.getElementById('showCodexToggle'),
     showCodexCliToggle: document.getElementById('showCodexCliToggle'),
     showGeminiToggle: document.getElementById('showGeminiToggle'),
@@ -398,7 +399,11 @@ function setupProviderSections() {
 // user's own file, or volume-adjusted in Settings.
 const SOUND_DEFAULTS = {
     reset: { src: '../../assets/sounds/reset-default.mp3', label: 'Default (heavenly choir)' },
-    burn: { src: '../../assets/sounds/burn-default.wav', label: 'Default (fire)' }
+    burn: { src: '../../assets/sounds/burn-default.wav', label: 'Default (fire)' },
+    // A banked weekly-limit reset arriving in the OpenAI account. Distinct
+    // from `reset` (a limit clearing early) because it is a different event —
+    // credit landing in the bank, not a window rolling over.
+    banked: { src: '../../assets/sounds/banked-default.mp3', label: 'Default (banked reset)' }
 };
 const _soundCache = {};          // kind -> resolved src (data: URL for custom files)
 let _soundPlaying = {};          // kind -> Audio, so a repeat retriggers cleanly
@@ -483,9 +488,21 @@ function setupSoundSettings() {
                     test:'soundResetTest', pick:'soundResetPick', reset:'soundResetReset' });
     wire('burn', { toggle:'soundBurnToggle', volume:'soundBurnVolume', name:'soundBurnName',
                    test:'soundBurnTest', pick:'soundBurnPick', reset:'soundBurnReset' });
+    wire('banked', { toggle:'soundBankedToggle', volume:'soundBankedVolume', name:'soundBankedName',
+                     test:'soundBankedTest', pick:'soundBankedPick', reset:'soundBankedReset' });
 }
 
 function setupEventListeners() {
+    // The account-email hide pills hide every account email at once, like the
+    // row-hide pills hide a row. Restored from Settings.
+    document.querySelectorAll('.account-email-hide').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await _saveSettingsPatch({ hideAccountEmails: true });
+            if (latestUsageData) renderAccountEmails(latestUsageData);
+        });
+    });
+
     setupSoundSettings();
     elements.refreshBtn.addEventListener('click', async () => {
         debugLog('Refresh button clicked');
@@ -551,25 +568,22 @@ function setupEventListeners() {
     // auto-sized widget.
     if (elements.wideBtn) {
         elements.wideBtn.addEventListener('click', () => {
-            // Clicking the layout you are already in does nothing. Toggling
-            // back to the auto-sized widget re-ran the whole fit cascade and
-            // read as the window randomly changing size under you.
-            if (_activePreset === 'wide') return;
-            _activePreset = 'wide';
-            window.electronAPI.applyWindowPreset('wide');
-            elements.wideBtn.classList.add('active');
+            const goWide = _activePreset !== 'wide';
+            _activePreset = goWide ? 'wide' : null;
+            window.electronAPI.applyWindowPreset(goWide ? 'wide' : 'reset');
+            elements.wideBtn.classList.toggle('active', goWide);
             if (elements.tallBtn) elements.tallBtn.classList.remove('active');
             _fitPresetHeight();
             _fitWidePresetWithGraph();
-            setTimeout(syncLandscapeCliWidth, 180);
+            if (goWide) setTimeout(syncLandscapeCliWidth, 180);
         });
     }
     if (elements.tallBtn) {
         elements.tallBtn.addEventListener('click', () => {
-            if (_activePreset === 'tall') return;
-            _activePreset = 'tall';
-            window.electronAPI.applyWindowPreset('tall');
-            elements.tallBtn.classList.add('active');
+            const goTall = _activePreset !== 'tall';
+            _activePreset = goTall ? 'tall' : null;
+            window.electronAPI.applyWindowPreset(goTall ? 'tall' : 'reset');
+            elements.tallBtn.classList.toggle('active', goTall);
             if (elements.wideBtn) elements.wideBtn.classList.remove('active');
             _fitPresetHeight();
         });
@@ -1739,6 +1753,27 @@ function _sortRowsByUsage() {
     }
 }
 
+function renderAccountEmails(data) {
+    const hidden = (window._cachedSettings || {}).hideAccountEmails === true;
+    const pick = {
+        Anthropic: data.anthropic_email || null,
+        Openai: (data.codex && (data.codex.email || (data.codex.cli && data.codex.cli.email))) || null,
+        Google: (data.gemini && (data.gemini.email || (data.gemini.cli && data.gemini.cli.email))) || null
+    };
+    for (const prov of ['Anthropic', 'Openai', 'Google']) {
+        const el = document.getElementById('email' + prov);
+        if (!el) continue;
+        const email = pick[prov];
+        const txt = el.querySelector('.account-email-text');
+        if (email && !hidden) {
+            if (txt) txt.textContent = email;
+            el.style.display = '';
+        } else {
+            el.style.display = 'none';
+        }
+    }
+}
+
 async function hideRow(key) {
     const hiddenRows = { ...hiddenRowsMap(), [key]: true };
     await _saveSettingsPatch({ hiddenRows });
@@ -2301,12 +2336,7 @@ function applySqueezeClasses() {
 
     // Landscape: wider than tall with room for three columns — the provider
     // sections sit side by side and every width band keys on COLUMN width
-    // Purely geometric in this build. Nothing in the app ever makes the
-    // window wider-than-tall at >=760px except the wide preset or the user's
-    // own drag, so gating this on the user-sized EVENT added nothing except a
-    // failure mode: whenever that event lagged or was missed, a wide window
-    // rendered the stacked portrait layout centered in acres of empty margin.
-    const landscape = w > h && w >= 760;
+    const landscape = on && w > h && w >= 760;
     if (window._lastLandscapeMin !== landscape) {
         window._lastLandscapeMin = landscape;
         if (window.electronAPI.setMinHeight) window.electronAPI.setMinHeight(landscape ? 340 : 180);
@@ -3024,6 +3054,11 @@ function updateUI(data) {
     setChip(elements.chipAnthropic, (!data.claude_code || data.claude_code_same_account !== false) && data.anthropic_source === 'cli'
         ? { cls: 'cli anthropic-cli', text: 'via CLI login', title: 'Usage is being read from your Claude CLI login. Logging in to claude.ai under Settings additionally exposes Extra Usage and credits.' }
         : null);
+    // Per-provider account email under the section header (landscape/tall only,
+    // hideable). Anthropic's comes from the account endpoint; the others carry
+    // their own email in the provider payload, whether signed in through the
+    // app or read from a CLI login on disk.
+    renderAccountEmails(data);
     // The amber pill IS the CLI subheading now — give it the account detail
     const pillTitle = (sel, t) => { const b = document.querySelector(sel); if (b) b.title = t; };
     pillTitle('#sgOpenaiCli .subheading', cxStatus && cxStatus.cli
@@ -3147,8 +3182,11 @@ function checkEarlyResets(data) {
     const banked = bank != null && _resetBank != null && bank > _resetBank;
     if (bank != null) _resetBank = bank;
 
-    if (!freed && !banked) return;
-    playAlertSound('reset');
+    // A limit clearing early and a banked reset landing are different events,
+    // so they get different sounds. If somehow both happen on one refresh,
+    // the banked one wins — it is the rarer, more notable event.
+    if (banked) { playAlertSound('banked'); return; }
+    if (freed) playAlertSound('reset');
 }
 
 
@@ -4493,6 +4531,7 @@ async function loadSettings() {
     if (elements.webhookUrl) elements.webhookUrl.value = settings.webhook?.url || '';
     if (elements.dailyDigestToggle) elements.dailyDigestToggle.checked = settings.dailyDigest !== false;
     if (elements.sortByUsageToggle) elements.sortByUsageToggle.checked = settings.sortByUsage === true;
+    if (elements.showAccountEmailsToggle) elements.showAccountEmailsToggle.checked = settings.hideAccountEmails !== true;
     if (elements.showCodexToggle) elements.showCodexToggle.checked = settings.showCodex !== false;
     if (elements.showCodexCliToggle) elements.showCodexCliToggle.checked = settings.showCodexCli !== false;
     if (elements.showGeminiToggle) elements.showGeminiToggle.checked = settings.showGemini !== false;
@@ -4587,6 +4626,7 @@ async function saveSettings() {
         },
         dailyDigest: elements.dailyDigestToggle.checked,
         sortByUsage: elements.sortByUsageToggle ? elements.sortByUsageToggle.checked : false,
+        hideAccountEmails: elements.showAccountEmailsToggle ? !elements.showAccountEmailsToggle.checked : false,
         showCodex: elements.showCodexToggle.checked,
         showCodexCli: elements.showCodexCliToggle ? elements.showCodexCliToggle.checked : true,
         showGemini: elements.showGeminiToggle ? elements.showGeminiToggle.checked : true,

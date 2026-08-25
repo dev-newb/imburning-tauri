@@ -147,6 +147,11 @@ pub async fn fetch_all(
         }
         data["anthropic_source"] = json!("web");
         data["claude_code_same_account"] = json!(true);
+        if let Some(app) = app {
+            if let Some(email) = crate::anthropic::account_email(app).await {
+                data["anthropic_email"] = json!(email);
+            }
+        }
     } else if let Some(cc) = anthropic {
         data["five_hour"] = cc.get("five_hour").cloned().unwrap_or(Value::Null);
         data["seven_day"] = cc.get("seven_day").cloned().unwrap_or(Value::Null);

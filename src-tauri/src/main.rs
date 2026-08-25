@@ -1,3 +1,4 @@
+#![recursion_limit = "512"]
 // I'm Burning! — Tauri build.
 //
 // The frontend is the Electron build's renderer, unmodified apart from a shim

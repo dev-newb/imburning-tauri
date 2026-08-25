@@ -399,6 +399,27 @@ fn last_good(store: &crate::store::Store) -> Option<ProviderData> {
 /// section. The endpoint is private and occasionally refuses a request that
 /// would succeed a minute later; showing yesterday's figure beats showing the
 /// user an empty Google section every time that happens.
+async fn google_email(client: &reqwest::Client, access: &str) -> Option<String> {
+    use std::sync::Mutex;
+    static CACHE: Mutex<Option<String>> = Mutex::new(None);
+    if let Ok(c) = CACHE.lock() {
+        if c.is_some() {
+            return c.clone();
+        }
+    }
+    let res = client
+        .get("https://www.googleapis.com/oauth2/v3/userinfo")
+        .header("Authorization", format!("Bearer {}", access))
+        .send()
+        .await
+        .ok()?;
+    let email = res.json::<Value>().await.ok()?.get("email")?.as_str()?.to_string();
+    if let Ok(mut c) = CACHE.lock() {
+        *c = Some(email.clone());
+    }
+    Some(email)
+}
+
 pub async fn fetch(client: &reqwest::Client, store: &crate::store::Store) -> Option<ProviderData> {
     let saved = last_good(store);
     // Everything below that touches the filesystem or spawns `security` is
@@ -453,5 +474,9 @@ async fn fetch_live(client: &reqwest::Client) -> Option<ProviderData> {
             json = fetch_models(client, &fresh).await;
         }
     }
-    normalize(&json?)
+    let mut data = normalize(&json?)?;
+    // The agy token carries no id_token, so the account email comes from
+    // Google's userinfo endpoint — one cheap call, cached for the process.
+    data.email = google_email(client, &access).await;
+    Some(data)
 }

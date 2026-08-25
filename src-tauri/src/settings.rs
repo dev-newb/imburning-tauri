@@ -55,10 +55,12 @@ fn defaults() -> Value {
         "subgroupHidden": {},
         "pizazz": true,
         "sortByUsage": false,
+        "hideAccountEmails": false,
         "flameStyle": "classic",
         "sounds": {
-            "reset": { "enabled": true, "path": Value::Null, "volume": 0.85 },
-            "burn":  { "enabled": true, "path": Value::Null, "volume": 0.85 }
+            "reset":  { "enabled": true, "path": Value::Null, "volume": 0.85 },
+            "burn":   { "enabled": true, "path": Value::Null, "volume": 0.85 },
+            "banked": { "enabled": true, "path": Value::Null, "volume": 0.85 }
         },
         "hiddenRows": {},
         "hiddenRowsSeeded": {},
