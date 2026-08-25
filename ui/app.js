@@ -1144,14 +1144,20 @@ function appendCodexCreditsRow(codexData, key, container, hiddenRows) {
     barGroup.appendChild(approx);
     row.appendChild(barGroup);
 
+    // Label + amount live in one wrapper spanning the In/At columns, so the
+    // pair centres as a unit on the columns' combined midline instead of
+    // hanging off whichever column each half happened to occupy.
+    const balPair = document.createElement('span');
+    balPair.className = 'balance-pair';
     const balLabel = document.createElement('span');
     balLabel.className = 'timer-text extra-balance-label';
     balLabel.textContent = 'Credits:';
-    row.appendChild(balLabel);
+    balPair.appendChild(balLabel);
     const balAmount = document.createElement('span');
     balAmount.className = 'resets-at-text extra-balance-amount';
     balAmount.textContent = credits.unlimited ? 'unlimited' : String(credits.balance ?? 0);
-    row.appendChild(balAmount);
+    balPair.appendChild(balAmount);
+    row.appendChild(balPair);
 
     attachHideBtn(row, key, 'Credits');
     container.appendChild(row);
@@ -1227,14 +1233,17 @@ function appendCodexResetsRow(codexData, key, container, hiddenRows) {
     // The row keeps the honest total. Expiries are per-orb — several banked
     // resets lapse at different times, so a single date in these columns
     // couldn't say which reset it referred to.
+    const balPair = document.createElement('span');
+    balPair.className = 'balance-pair';
     const balLabel = document.createElement('span');
     balLabel.className = 'timer-text extra-balance-label';
     balLabel.textContent = 'Resets:';
-    row.appendChild(balLabel);
+    balPair.appendChild(balLabel);
     const balAmount = document.createElement('span');
     balAmount.className = 'resets-at-text extra-balance-amount';
     balAmount.textContent = String(resets.available);
-    row.appendChild(balAmount);
+    balPair.appendChild(balAmount);
+    row.appendChild(balPair);
 
     attachHideBtn(row, key, 'Limit Resets');
     container.appendChild(row);
@@ -1363,17 +1372,20 @@ function buildExtraRows(data) {
             elapsedGroup.className = 'usage-elapsed-group';
             row.appendChild(elapsedGroup);
 
+            const balPair = document.createElement('span');
+            balPair.className = 'balance-pair';
             const timerText = document.createElement('span');
             timerText.className = 'timer-text extra-balance-label';
             timerText.textContent = 'Credits:';
-            row.appendChild(timerText);
+            balPair.appendChild(timerText);
 
             const resetsText = document.createElement('span');
             resetsText.className = 'resets-at-text extra-balance-amount';
             if (value.balance_cents != null) {
                 resetsText.textContent = formatCurrency(value.balance_cents, value.currency);
             }
-            row.appendChild(resetsText);
+            balPair.appendChild(resetsText);
+            row.appendChild(balPair);
         } else {
             // Prefer the window the backend states outright. Guessing it from
             // the key only works while a prefix implies one window length, and
