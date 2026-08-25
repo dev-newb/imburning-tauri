@@ -1146,7 +1146,7 @@ function appendCodexCreditsRow(codexData, key, container, hiddenRows) {
 
     const balLabel = document.createElement('span');
     balLabel.className = 'timer-text extra-balance-label';
-    balLabel.textContent = 'Account Credits:';
+    balLabel.textContent = 'Credits:';
     row.appendChild(balLabel);
     const balAmount = document.createElement('span');
     balAmount.className = 'resets-at-text extra-balance-amount';
@@ -1229,7 +1229,7 @@ function appendCodexResetsRow(codexData, key, container, hiddenRows) {
     // couldn't say which reset it referred to.
     const balLabel = document.createElement('span');
     balLabel.className = 'timer-text extra-balance-label';
-    balLabel.textContent = 'Resets Available:';
+    balLabel.textContent = 'Resets:';
     row.appendChild(balLabel);
     const balAmount = document.createElement('span');
     balAmount.className = 'resets-at-text extra-balance-amount';
@@ -1365,7 +1365,7 @@ function buildExtraRows(data) {
 
             const timerText = document.createElement('span');
             timerText.className = 'timer-text extra-balance-label';
-            timerText.textContent = 'Account Credits:';
+            timerText.textContent = 'Credits:';
             row.appendChild(timerText);
 
             const resetsText = document.createElement('span');

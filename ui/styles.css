@@ -3479,12 +3479,10 @@ button:focus:not(:focus-visible) { outline: none; }
 }
 
 /* ---- Per-provider account email under the section header -------------------
-   Shown only in the roomy layouts (wide/tall); the default portrait widget is
-   too narrow to spare the line. Muted, small, with a hide pill matching the
-   row-hide pills. */
-.account-email { display: none; }
-body.landscape .account-email,
-body.tall .account-email {
+   Shown in every layout — it lives on its own wrapped line under the provider
+   name, so even the narrow portrait widget has room for it. Muted, small,
+   with a hide pill matching the row-hide pills. (Settings can hide them all.) */
+.account-email {
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -3503,8 +3501,7 @@ body.tall .account-email {
     text-overflow: ellipsis;
 }
 /* The header is a flex row; a full-basis child wraps onto a new line. */
-body.landscape .section-header,
-body.tall .section-header { flex-wrap: wrap; }
+.section-header { flex-wrap: wrap; }
 .account-email-text {
     overflow: hidden;
     text-overflow: ellipsis;
