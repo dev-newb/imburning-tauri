@@ -306,8 +306,12 @@ body.theme-light .graph-btn.active {
     grid-template-columns: 128px minmax(0, 160px) 36px 72px 68px;
     align-items: center;
     gap: 10px;
+    /* Right padding matches left, and space-between spreads the tracks so the
+       AT column sits as close to the right edge as the labels do to the left —
+       fixed tracks used to park their leftover width as extra right margin. */
+    justify-content: space-between;
     margin-bottom: 2px;
-    padding: 0 16px 0 12px;
+    padding: 0 12px;
     height: 32px;
 }
 
@@ -316,7 +320,8 @@ body.theme-light .graph-btn.active {
     grid-template-columns: 128px minmax(0, 160px) 36px 72px 68px;
     align-items: center;
     gap: 10px;
-    padding: 0 16px 0 12px;
+    justify-content: space-between;
+    padding: 0 12px;
     margin-bottom: 2px;
 }
 
@@ -585,18 +590,21 @@ body.theme-light .graph-btn.active {
     opacity: 0.8;
 }
 
+/* Label hugs the right of its column and the amount hugs the left of the
+   next, so "Credits: 0" clusters as one centred pair at the column seam
+   instead of the value drifting to the far edge of the row. */
 .timer-text.extra-balance-label {
     font-size: 12px;
     color: #a0a0a0;
     font-weight: 400;
-    text-align: left;
+    text-align: right;
 }
 
 .resets-at-text.extra-balance-amount {
     font-size: 12px;
     color: #a0a0a0;
     font-weight: 400;
-    text-align: center;
+    text-align: left;
 }
 
 .extra-status {
