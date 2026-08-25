@@ -2532,11 +2532,26 @@ function dualPairsFor(company, data) {
             text: credits.unlimited ? '∞' : String(credits.balance ?? 0),
             title: credits.unlimited ? 'Unlimited account credits' : `${credits.balance ?? 0} account credits`
         } : null;
-        const resetInfo = (resets) => resets ? {
-            kind: 'summary',
-            text: String(resets.available ?? 0),
-            title: `${resets.available ?? 0} banked limit resets`
-        } : null;
+        const resetInfo = (resets) => {
+            if (!resets) return null;
+            const avail = resets.available ?? 0;
+            // A banked reset is a glowing orb everywhere else it appears (tall
+            // rows, compact rows); wide mode showed a bare "1" instead, which
+            // read as a count, not the same live token. Render the orbs here
+            // too so the three layouts agree — the pixel-fire loop picks up any
+            // .reset-dot in the DOM, so the glow comes for free. Only fall back
+            // to the number when there is nothing banked to draw.
+            if (avail > 0) {
+                const credits = Array.isArray(resets.credits) ? resets.credits : [];
+                const tip = credits.length
+                    ? 'Limit Resets\n' + credits.map((c, i) => c.expiresAt
+                        ? `${i + 1}. expires in ${formatCountdown(Math.max(c.expiresAt - Date.now(), 0))}`
+                        : `${i + 1}. no expiry reported`).join('\n')
+                    : `${avail} banked limit reset${avail === 1 ? '' : 's'}`;
+                return { kind: 'orbs', orbs: Math.min(avail, 12), title: tip };
+            }
+            return { kind: 'summary', text: String(avail), title: `${avail} banked limit resets` };
+        };
         const hiddenRows = hiddenRowsMap();
         const byKey = {};
         for (const l of (d.limits || [])) byKey[l.key] = { label: l.label, desk: mk(l.percent, l.resetsAt, total(l.key)) };
@@ -2602,6 +2617,20 @@ function buildDualPair(info, cliSide) {
         value.className = 'dual-special-value';
         value.textContent = info.text;
         pair.appendChild(value);
+        return pair;
+    }
+    if (info.kind === 'orbs') {
+        pair.classList.add('special', 'dual-orbs');
+        pair.title = info.title || '';
+        const dots = document.createElement('div');
+        dots.className = 'reset-dots' + (info.orbs === 1 ? ' single' : '');
+        for (let i = 0; i < info.orbs; i++) {
+            const dot = document.createElement('span');
+            dot.className = 'reset-dot';
+            dot.style.animationDelay = `${(i * 1.3 + 0.4).toFixed(1)}s`;
+            dots.appendChild(dot);
+        }
+        pair.appendChild(dots);
         return pair;
     }
     const pct = document.createElement('span');
