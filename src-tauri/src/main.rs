@@ -1017,6 +1017,64 @@ fn main() {
                 });
             }
 
+            // Boot fit, host-driven. The renderer's own boot fit runs inside
+            // requestAnimationFrame, which WKWebView throttles to a standstill
+            // whenever the window is not being rendered — a fresh launch that
+            // lands on another Space (or behind a fullscreen app) then keeps
+            // the blind config height forever, showing a 180px sliver with a
+            // scrollbar. Drive the same measurement from the host, where eval
+            // is never throttled — the exact fix settle_preset_height applies
+            // for presets, but for plain startup.
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    for delay in [6u64, 15, 30, 60] {
+                        tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+                        let Some(w) = handle.get_webview_window("main") else { return };
+                        // A preset owns geometry; compact manages its own.
+                        if ACTIVE_PRESET.lock().map(|p| p.is_some()).unwrap_or(false) {
+                            return;
+                        }
+                        if COMPACT.load(std::sync::atomic::Ordering::Relaxed) {
+                            return;
+                        }
+                        let (Ok(size), Ok(scale)) = (w.inner_size(), w.scale_factor()) else {
+                            return;
+                        };
+                        let (lw, lh) = (size.width as f64 / scale, size.height as f64 / scale);
+                        // The user took over — stop.
+                        if geometry_is_user_sized(lw, lh) {
+                            return;
+                        }
+                        let (tx, rx) = std::sync::mpsc::channel();
+                        let js = r#"(function(){
+                            try {
+                                if (typeof _chromeHeight === 'function' && typeof _intrinsicMainContentHeight === 'function') {
+                                    return Math.ceil(_chromeHeight() + _intrinsicMainContentHeight() + 10);
+                                }
+                            } catch (e) {}
+                            return 0;
+                        })()"#;
+                        if w.eval_with_callback(js, move |r| { let _ = tx.send(r); }).is_err() {
+                            return;
+                        }
+                        let Ok(raw) = rx.recv_timeout(std::time::Duration::from_secs(3)) else { continue };
+                        let Ok(target) = raw.trim().parse::<f64>() else { continue };
+                        if target < 120.0 {
+                            continue; // not rendered yet, or mid-reflow
+                        }
+                        if (target - lh).abs() <= 12.0 {
+                            continue; // already fits
+                        }
+                        dev_log(&format!("  boot settle: content {:.0} vs window {:.0}", target, lh));
+                        if let Ok(mut slot) = LAST_SET_HEIGHT.lock() {
+                            *slot = target;
+                        }
+                        let _ = w.set_size(tauri::LogicalSize::new(lw, target));
+                    }
+                });
+            }
+
             // Pull the rendered DOM from the host side rather than having the
             // page push it on a timer. A window on another Space is not
             // rendered, and WebKit throttles its timers to a standstill — so a
