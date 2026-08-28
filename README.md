@@ -1,8 +1,10 @@
-# I'm Burning! — Tauri build
+# I'm Burning! (Tauri)
 
-A port of [I'm Burning!](https://github.com/rmcquail/imburning) off Electron and onto
-Tauri. Same widget, same UI, no bundled Chromium: on macOS it renders in WKWebView, on
-Windows in WebView2, on Linux in WebKitGTK.
+A port of [I'm Burning! (Electron)](https://github.com/dev-newb/imburning-electron) off
+Electron and onto Tauri. Same widget, same UI, no bundled Chromium: on macOS it renders
+in WKWebView, on Windows in WebView2, on Linux in WebKitGTK.
+
+![I'm Burning! (Tauri) — portrait view: Anthropic, OpenAI, and Google sections with account emails, banked-reset orb, and the prediction graph](docs/screenshot-portrait.png)
 
 ## Why
 
@@ -50,6 +52,9 @@ Verified against live accounts on macOS:
 * menu-bar badges, the detachable graph window, history export (CSV/JSON)
 * settings, window controls, dragging, presets, compact mode, notifications, webhooks,
   alert sounds, and the chart over seeded history
+* account email labels under each provider header, the banked-reset sound and its
+  wide-mode orb, and a host-driven boot height fit (WKWebView throttles the renderer's
+  own fit loop whenever the window isn't rendered — the host measures instead)
 
 Not ported: the **self-updater**. Tauri's updater wants a signing key and a release
 feed, which is release infrastructure rather than code, so it is a deliberate decision
