@@ -403,7 +403,10 @@ const SOUND_DEFAULTS = {
     // A banked weekly-limit reset arriving in the OpenAI account. Distinct
     // from `reset` (a limit clearing early) because it is a different event —
     // credit landing in the bank, not a window rolling over.
-    banked: { src: '../../assets/sounds/banked-default.mp3', label: 'Default (banked reset)' }
+    banked: { src: '../../assets/sounds/banked-default.mp3', label: 'Default (banked reset)' },
+    // A pool crossing to 100% — you just hit the wall. Bad news gets a thud,
+    // not a fanfare.
+    wall: { src: '../../assets/sounds/wall-default.mp3', label: 'Default (rock punch)' }
 };
 const _soundCache = {};          // kind -> resolved src (data: URL for custom files)
 let _soundPlaying = {};          // kind -> Audio, so a repeat retriggers cleanly
@@ -490,6 +493,8 @@ function setupSoundSettings() {
                    test:'soundBurnTest', pick:'soundBurnPick', reset:'soundBurnReset' });
     wire('banked', { toggle:'soundBankedToggle', volume:'soundBankedVolume', name:'soundBankedName',
                      test:'soundBankedTest', pick:'soundBankedPick', reset:'soundBankedReset' });
+    wire('wall', { toggle:'soundWallToggle', volume:'soundWallVolume', name:'soundWallName',
+                   test:'soundWallTest', pick:'soundWallPick', reset:'soundWallReset' });
 }
 
 function setupEventListeners() {
@@ -3190,24 +3195,27 @@ const EARLY_RESET_FROM = 5;   // was at least this full…
 const EARLY_RESET_TO = 1;     // …and came back essentially empty
 let _resetWatch = null;       // null until seeded — never fires on first load
 let _resetBank = null;
+let _blockedKeys = null;      // pool keys currently at 100% (wall tracking)
 
 function resetWatchPools(data) {
     const out = [];
-    const add = (key, pct, resetsAt) => {
+    const add = (key, pct, resetsAt, label) => {
         if (pct == null || !isFinite(pct)) return;
-        out.push({ key, pct, resetsAt: Date.parse(resetsAt || '') });
+        out.push({ key, pct, resetsAt: Date.parse(resetsAt || ''), label: label || key });
     };
-    add('five_hour', data.five_hour?.utilization, data.five_hour?.resets_at);
-    add('seven_day', data.seven_day?.utilization, data.seven_day?.resets_at);
+    add('five_hour', data.five_hour?.utilization, data.five_hour?.resets_at, 'Claude Session (5h)');
+    add('seven_day', data.seven_day?.utilization, data.seven_day?.resets_at, 'Claude Models (7d)');
     for (const key of Object.keys(EXTRA_ROW_CONFIG)) {
-        if (data[key]) add(key, data[key].utilization, data[key].resets_at);
+        if (data[key]) add(key, data[key].utilization, data[key].resets_at, EXTRA_ROW_CONFIG[key].label);
     }
     const feeds = [
-        ['codex_', data.codex?.limits], ['codex_cli_', data.codex?.cli?.limits],
-        ['gemini_', data.gemini?.limits], ['gemini_cli_', data.gemini?.cli?.limits]
+        ['codex_', data.codex?.limits, 'OpenAI '], ['codex_cli_', data.codex?.cli?.limits, 'OpenAI CLI '],
+        ['gemini_', data.gemini?.limits, 'Google '], ['gemini_cli_', data.gemini?.cli?.limits, 'Google CLI ']
     ];
-    for (const [prefix, list] of feeds) {
-        for (const lim of (list || [])) add(prefix + lim.key, lim.percent, lim.resetsAt || lim.resets_at);
+    for (const [prefix, list, brand] of feeds) {
+        for (const lim of (list || [])) {
+            add(prefix + lim.key, lim.percent, lim.resetsAt || lim.resets_at, brand + (lim.label || lim.key));
+        }
     }
     return out;
 }
@@ -3220,20 +3228,45 @@ function checkEarlyResets(data) {
         _resetWatch = {};
         for (const p of pools) _resetWatch[p.key] = p;
         _resetBank = bank;
+        // Seed the blocked set too — a pool already at 100% when the app
+        // launches must not fire "hit the wall" on the first refresh.
+        _blockedKeys = new Set(pools.filter((p) => p.pct >= 100).map((p) => p.key));
         return;
     }
 
     const now = Date.now();
     let freed = false;
+    let wallPool = null;
     for (const p of pools) {
         const prev = _resetWatch[p.key];
         _resetWatch[p.key] = p;
         if (!prev) continue;
+        // Hitting the wall: a pool crossing from usable to 100% between two
+        // refreshes. Independent of the reset/banked events below — bad news
+        // does not queue behind good news.
+        if (prev.pct < 100 && p.pct >= 100 && !wallPool) wallPool = p;
         if (!(prev.pct >= EARLY_RESET_FROM && p.pct <= EARLY_RESET_TO)) continue;
         // Only early if the reset the provider promised was still in the future
         if (!isFinite(prev.resetsAt) || prev.resetsAt <= now) continue;
         freed = true;
     }
+
+    const nowBlocked = new Set(pools.filter((p) => p.pct >= 100).map((p) => p.key));
+    if (wallPool) {
+        playAlertSound('wall');
+        const when = isFinite(wallPool.resetsAt)
+            ? ' Resets ' + formatResetsAt(new Date(wallPool.resetsAt).toISOString(), true,
+                (window._cachedSettings || {}).timeFormat || '12h', 'date-day-time') + '.'
+            : '';
+        window.electronAPI.showNotification('Limit reached — ' + wallPool.label,
+            wallPool.label + ' is at 100%.' + when);
+    } else if (_blockedKeys && _blockedKeys.size > 0 && nowBlocked.size === 0) {
+        // Every wall the user had hit has cleared — worth a heads-up (the
+        // reset itself already made its sound; this is the notification).
+        window.electronAPI.showNotification("I'm Burning!", 'Usage is available again.');
+    }
+    _blockedKeys = nowBlocked;
+
     const banked = bank != null && _resetBank != null && bank > _resetBank;
     if (bank != null) _resetBank = bank;
 
@@ -4575,7 +4608,9 @@ async function loadSettings() {
     if (elements.trayOutlineColor) elements.trayOutlineColor.value = settings.trayOutline?.color || '#facc15';
     if (elements.burnAlertsToggle) elements.burnAlertsToggle.checked = settings.burnAlerts !== false;
     for (const [kind, ids] of [['reset', ['soundResetToggle', 'soundResetVolume']],
-                               ['burn', ['soundBurnToggle', 'soundBurnVolume']]]) {
+                               ['burn', ['soundBurnToggle', 'soundBurnVolume']],
+                               ['banked', ['soundBankedToggle', 'soundBankedVolume']],
+                               ['wall', ['soundWallToggle', 'soundWallVolume']]]) {
         const cfg = { enabled: true, volume: 0.85, ...((settings.sounds || {})[kind] || {}) };
         const t = document.getElementById(ids[0]); if (t) t.checked = cfg.enabled !== false;
         const v = document.getElementById(ids[1]); if (v) v.value = Math.round(cfg.volume * 100);

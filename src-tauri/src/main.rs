@@ -398,6 +398,46 @@ fn set_window_position(window: tauri::Window, position: Value) {
     ) else {
         return;
     };
+    // Off-screen guard: a position saved on a monitor that is no longer
+    // connected (ultrawide unplugged, display rearranged) would restore the
+    // window where nobody can see it. If the window body would land on no
+    // current monitor, centre it on the primary instead. Mirrors the
+    // Electron build's clampBoundsToDisplays.
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let (w, h) = window
+        .inner_size()
+        .map(|s| (s.width as f64 / scale, s.height as f64 / scale))
+        .unwrap_or((590.0, 400.0));
+    let mon_rect = |m: &tauri::Monitor| {
+        let msc = m.scale_factor();
+        let p = m.position();
+        let s = m.size();
+        (
+            p.x as f64 / msc,
+            p.y as f64 / msc,
+            s.width as f64 / msc,
+            s.height as f64 / msc,
+        )
+    };
+    let on_screen = window
+        .available_monitors()
+        .map(|mons| {
+            mons.iter().any(|m| {
+                let (mx, my, mw, mh) = mon_rect(m);
+                x < mx + mw && x + w > mx && y < my + mh && y + h > my
+            })
+        })
+        .unwrap_or(true);
+    if !on_screen {
+        if let Ok(Some(m)) = window.primary_monitor() {
+            let (mx, my, mw, mh) = mon_rect(&m);
+            let _ = window.set_position(tauri::LogicalPosition::new(
+                mx + (mw - w) / 2.0,
+                my + (mh - h) / 2.0,
+            ));
+            return;
+        }
+    }
     let _ = window.set_position(tauri::LogicalPosition::new(x, y));
 }
 
@@ -939,6 +979,54 @@ fn main() {
                     .as_bool()
                     .unwrap_or(true);
                 let _ = window.set_always_on_top(on_top);
+            }
+
+            // Window position: restore the saved spot (through the same
+            // off-screen clamp the command uses, so a position from an
+            // unplugged monitor centres instead of vanishing), then keep it
+            // saved as the user drags. Parity with Electron's windowPosition
+            // handling — this build previously never persisted position at
+            // all; the key in config.json was a fossil from the settings
+            // seed.
+            if let Some(window) = app.get_webview_window("main") {
+                let saved = state.store.get_or("windowPosition", json!(null));
+                if let (Some(x), Some(y)) = (
+                    saved.get("x").and_then(|v| v.as_f64()),
+                    saved.get("y").and_then(|v| v.as_f64()),
+                ) {
+                    set_window_position(
+                        window.as_ref().window(),
+                        json!({ "x": x, "y": y }),
+                    );
+                }
+                let mover = window.clone();
+                let move_store = state.clone();
+                let pending = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+                window.on_window_event(move |event| {
+                    if !matches!(event, tauri::WindowEvent::Moved(_)) {
+                        return;
+                    }
+                    let seq = pending.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                    let mover = mover.clone();
+                    let move_store = move_store.clone();
+                    let pending = pending.clone();
+                    tauri::async_runtime::spawn(async move {
+                        // Debounced: only the last move of a drag writes.
+                        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                        if pending.load(std::sync::atomic::Ordering::Relaxed) != seq {
+                            return;
+                        }
+                        if let (Ok(pos), Ok(scale)) = (mover.outer_position(), mover.scale_factor()) {
+                            move_store.store.set(
+                                "windowPosition",
+                                json!({
+                                    "x": pos.x as f64 / scale,
+                                    "y": pos.y as f64 / scale
+                                }),
+                            );
+                        }
+                    });
+                });
             }
 
             // The renderer applies its squeeze/responsive classes only when

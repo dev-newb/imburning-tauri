@@ -60,7 +60,8 @@ fn defaults() -> Value {
         "sounds": {
             "reset":  { "enabled": true, "path": Value::Null, "volume": 0.85 },
             "burn":   { "enabled": true, "path": Value::Null, "volume": 0.85 },
-            "banked": { "enabled": true, "path": Value::Null, "volume": 0.85 }
+            "banked": { "enabled": true, "path": Value::Null, "volume": 0.85 },
+            "wall":   { "enabled": true, "path": Value::Null, "volume": 0.85 }
         },
         "hiddenRows": {},
         "hiddenRowsSeeded": {},
