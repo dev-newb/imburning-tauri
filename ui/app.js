@@ -1714,7 +1714,12 @@ function rowCode(key, label) {
     if (/^(cc_)?seven_day_scoped_/.test(key)) return clean.slice(0, 3).toUpperCase();
     if (key === 'extra_usage') return 'EXT';
     if (key.startsWith('codex_')) {
-        if (/^Codex/i.test(clean)) return 'CDX';
+        // OpenAI now runs several Codex windows at once (5h + 7d); a bare
+        // CDX for all of them read as the same row repeated three times.
+        if (/^Codex/i.test(clean)) {
+            const win = (clean.match(/\(([^)]+)\)/) || [])[1];
+            return win ? 'CDX ' + win.toUpperCase() : 'CDX';
+        }
         if (/Spark/i.test(clean)) return 'SPK';
         if (/Code Review/i.test(clean)) return 'CRV';
         return clean.replace(/\s*\(.*\)$/, '').slice(0, 3).toUpperCase();
@@ -2565,14 +2570,23 @@ function dualPairsFor(company, data) {
             return { kind: 'summary', text: String(avail), title: `${avail} banked limit resets` };
         };
         const hiddenRows = hiddenRowsMap();
-        const byKey = {};
-        for (const l of (d.limits || [])) byKey[l.key] = { label: l.label, desk: mk(l.percent, l.resetsAt, total(l.key)) };
-        for (const l of d.cli.limits) {
-            byKey[l.key] = byKey[l.key] || { label: l.label };
-            byKey[l.key].cli = mk(l.percent, l.resetsAt, total(l.key));
+        // Pair desktop and CLI rows by LABEL, not key. OpenAI renamed its
+        // keys per surface ("secondary_seven_day" on desktop vs
+        // "primary_seven_day" in the CLI for the same "Codex (7d)" pool), so
+        // key-matching stopped merging the shared pool and drew two
+        // half-empty rows. The label is the pool's stable identity.
+        const poolId = (label) => String(label || '').trim().toLowerCase();
+        const byPool = {};
+        for (const l of (d.limits || [])) {
+            byPool[poolId(l.label)] = { label: l.label, key: l.key, desk: mk(l.percent, l.resetsAt, total(l.key)) };
         }
-        const pairs = Object.entries(byKey).map(([k, v]) => ({
-            code: rowCode('codex_' + k, v.label), color: CODE_COLORS.codex,
+        for (const l of d.cli.limits) {
+            const id = poolId(l.label);
+            byPool[id] = byPool[id] || { label: l.label, key: l.key };
+            byPool[id].cli = mk(l.percent, l.resetsAt, total(l.key));
+        }
+        const pairs = Object.values(byPool).map((v) => ({
+            code: rowCode('codex_' + v.key, v.label), color: CODE_COLORS.codex,
             name: v.label, desk: v.desk, cli: v.cli
         }));
         const deskCredits = hiddenRows.codex_row_credits ? null : creditInfo(d.credits);

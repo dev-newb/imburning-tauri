@@ -2816,6 +2816,19 @@ body.landscape.vh-short.dual-compact .dual-pill {
 
 .dual-head { height: 20px; }
 
+/* A faint vertical rule down the gap column, so the two accounts read as two
+   columns at a glance. Lives on .dual-gap, which hide-cli already removes —
+   one account, no line. Rows are contiguous, so the per-row segments join. */
+.dual-row .dual-gap,
+.dual-head .dual-gap {
+    align-self: stretch;
+    background: linear-gradient(rgba(160, 165, 190, 0.16), rgba(160, 165, 190, 0.16)) center / 1px 100% no-repeat;
+}
+body.theme-light .dual-row .dual-gap,
+body.theme-light .dual-head .dual-gap {
+    background: linear-gradient(rgba(40, 45, 70, 0.18), rgba(40, 45, 70, 0.18)) center / 1px 100% no-repeat;
+}
+
 /* Collapsing the second account hides ONLY the CLI columns — the Desktop
    trio and its label stay. (Listing .dual-row here hid the whole row, wiping
    the Desktop account too.) */
@@ -3507,11 +3520,12 @@ button:focus:not(:focus-visible) { outline: none; }
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    /* Its own line under the header, indented to sit under the provider name
-       rather than the collapse chevron and eye. */
-    flex-basis: 100%;
+    /* Pinned to the header row's RIGHT edge (margin-left:auto soaks up the
+       slack), so every provider's email sits in the same spot regardless of
+       how wide the provider name renders. Wraps to its own right-aligned
+       line when the header is too narrow for both. */
     order: 99;
-    margin-left: 34px;
+    margin-left: auto;
     margin-top: 1px;
     font-size: 10px;
     letter-spacing: 0.2px;
