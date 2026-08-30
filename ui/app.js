@@ -7,6 +7,7 @@ let isExpanded = false;
 let isCompactMode = false;
 let _settingsOpenedFromCompact = false;
 let _settingsReturnToWide = false;
+let _settingsReturnBounds = null;
 let usageChart = null;
 let graphVisible = false;
 let graphWasVisible = false; // preserves graph state across compact mode toggle
@@ -665,6 +666,19 @@ function setupEventListeners() {
             if (elements.wideBtn && _activePreset !== 'wide') {
                 setTimeout(() => elements.wideBtn.click(), 200);
             }
+        } else if (_settingsReturnBounds) {
+            const bounds = _settingsReturnBounds;
+            _settingsReturnBounds = null;
+            // Release the tall preset we borrowed, then put the exact
+            // hand-sized geometry back.
+            if (_activePreset === 'tall') {
+                _activePreset = null;
+                if (elements.tallBtn) elements.tallBtn.classList.remove('active');
+                window.electronAPI.applyWindowPreset('reset');
+            }
+            setTimeout(() => {
+                if (window.electronAPI.setWindowBounds) window.electronAPI.setWindowBounds(bounds);
+            }, 250);
         }
         startAutoUpdate();
         // Account toggles filter post-fetch, so a refetch applies them now
@@ -937,6 +951,10 @@ function setupEventListeners() {
         // wide was the active preset.
         if (document.body.classList.contains('landscape')) {
             _settingsReturnToWide = _activePreset === 'wide';
+            // A hand-stretched landscape window (no preset) gets its exact
+            // geometry back after Settings closes.
+            _settingsReturnBounds = (!_activePreset && window.electronAPI.getWindowBounds)
+                ? await window.electronAPI.getWindowBounds() : null;
             if (elements.tallBtn && _activePreset !== 'tall') elements.tallBtn.click();
             await new Promise((resolve) => setTimeout(resolve, 350));
         }

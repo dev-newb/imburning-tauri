@@ -1088,8 +1088,10 @@ body.theme-light .ice-slab {
             rgba(255, 255, 255, 0.95) 0%, rgba(228, 247, 255, 0.82) 17%,
             rgba(178, 219, 252, 0.64) 46%, rgba(56, 106, 166, 0.58) 83%,
             rgba(99, 152, 202, 0.46) 100%);
-    -webkit-mask-image: linear-gradient(180deg, #000 52%, rgba(0, 0, 0, 0.6) 84%, rgba(0, 0, 0, 0.22) 100%);
-    mask-image: linear-gradient(180deg, #000 52%, rgba(0, 0, 0, 0.6) 84%, rgba(0, 0, 0, 0.22) 100%);
+    /* Fade hard toward the tips — text wrapped beneath the header (the
+       rectangular columns) has to stay legible through the hanging ice. */
+    -webkit-mask-image: linear-gradient(180deg, #000 22%, rgba(0, 0, 0, 0.5) 52%, rgba(0, 0, 0, 0.14) 82%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 22%, rgba(0, 0, 0, 0.5) 52%, rgba(0, 0, 0, 0.14) 82%, transparent 100%);
     filter: drop-shadow(1px 1.5px 1.2px rgba(18, 48, 88, 0.5));
 }
 

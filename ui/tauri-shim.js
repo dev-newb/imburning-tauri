@@ -119,6 +119,8 @@
     runMacUpdate: noop,
 
     // ---- notifications ----
+    getWindowBounds: () => invoke('get_window_bounds'),
+    setWindowBounds: (bounds) => invoke('set_window_bounds', { bounds }),
     setCliAdopted: (provider, adopted) =>
       invoke('set_cli_adopted', { provider: String(provider || ''), adopted: adopted === true }),
     showNotification: async (title, body) => {

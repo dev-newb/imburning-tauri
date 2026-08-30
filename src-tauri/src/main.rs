@@ -71,6 +71,32 @@ fn set_cli_adopted(
 }
 
 #[tauri::command]
+fn get_window_bounds(window: tauri::Window) -> Value {
+    let (Ok(pos), Ok(size), Ok(scale)) =
+        (window.outer_position(), window.inner_size(), window.scale_factor())
+    else {
+        return Value::Null;
+    };
+    json!({
+        "x": pos.x as f64 / scale,
+        "y": pos.y as f64 / scale,
+        "width": size.width as f64 / scale,
+        "height": size.height as f64 / scale
+    })
+}
+
+#[tauri::command]
+fn set_window_bounds(window: tauri::Window, bounds: Value) -> Value {
+    if let (Some(w), Some(h)) = (bounds["width"].as_f64(), bounds["height"].as_f64()) {
+        let _ = window.set_size(tauri::LogicalSize::new(w, h));
+    }
+    if let (Some(x), Some(y)) = (bounds["x"].as_f64(), bounds["y"].as_f64()) {
+        let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+    }
+    json!({ "ok": true })
+}
+
+#[tauri::command]
 fn save_settings(window: tauri::Window, state: State<'_, std::sync::Arc<AppState>>, settings: Value) -> Value {
     // Settings with a window side effect have to be APPLIED here, not merely
     // stored: the config hard-codes alwaysOnTop, so without this the toggle
@@ -1278,6 +1304,8 @@ fn main() {
             get_settings,
             save_settings,
             set_cli_adopted,
+            get_window_bounds,
+            set_window_bounds,
             get_credentials,
             anthropic_login,
             oauth_connect,
