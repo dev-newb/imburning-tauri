@@ -6,6 +6,7 @@ let latestUsageData = null;
 let isExpanded = false;
 let isCompactMode = false;
 let _settingsOpenedFromCompact = false;
+let _settingsReturnToWide = false;
 let usageChart = null;
 let graphVisible = false;
 let graphWasVisible = false; // preserves graph state across compact mode toggle
@@ -659,6 +660,12 @@ function setupEventListeners() {
         } else {
             window.electronAPI.settingsRestore();
         }
+        if (_settingsReturnToWide) {
+            _settingsReturnToWide = false;
+            if (elements.wideBtn && _activePreset !== 'wide') {
+                setTimeout(() => elements.wideBtn.click(), 200);
+            }
+        }
         startAutoUpdate();
         // Account toggles filter post-fetch, so a refetch applies them now
         await fetchUsageData();
@@ -923,6 +930,15 @@ function setupEventListeners() {
         if (isCompactMode) {
             _settingsOpenedFromCompact = true;
             window.electronAPI.setCompactMode(false);
+        }
+        // Settings is designed for the tall/portrait layout. Opening it from
+        // the rectangular window kept the wide geometry and squeezed the
+        // panel; switch to tall first, and go back to wide on close when
+        // wide was the active preset.
+        if (document.body.classList.contains('landscape')) {
+            _settingsReturnToWide = _activePreset === 'wide';
+            if (elements.tallBtn && _activePreset !== 'tall') elements.tallBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 350));
         }
         await loadSettings();
         elements.settingsOverlay.style.display = 'flex';

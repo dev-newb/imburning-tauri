@@ -3637,12 +3637,26 @@ body.no-pizazz .account-offer { animation: none; }
 /* When the email is hidden the dynamite still holds the right edge. */
 .account-email[style*="none"] + .provider-tnt { margin-left: auto; }
 
-/* Settings: the hide/restore button — full-width column footer */
+/* Settings: the hide/restore button bottom-anchors in every column, sitting
+   directly above a shared horizontal rule. Only Google keeps content below
+   the line (its Usage source); the other footers stay empty at the same
+   height so the rule and the buttons align across all three columns. */
 .provider-hide-btn {
     padding: 3px 10px;
     width: 100%;
-    margin-top: 6px;
+    margin-top: auto;
 }
+
+.provider-col-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    margin: 8px -9px 0;
+    padding: 6px 9px 0;
+    min-height: 56px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.provider-col-footer .settings-select { width: 100%; }
 .provider-hide-btn.restore {
     border-color: rgba(45, 212, 191, 0.5);
     color: #7fd8c8;
