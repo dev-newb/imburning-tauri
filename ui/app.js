@@ -1840,7 +1840,7 @@ function applyProviderVisibility() {
         const btn = document.getElementById('providerHide' + PERMAHIDE_TITLECASE[prov]);
         if (!btn) continue;
         const isHidden = hidden[prov] === true;
-        btn.textContent = isHidden ? 'Restore' : '\u{1F9E8} Hide';
+        btn.textContent = isHidden ? 'Restore provider' : '\u{1F9E8} Hide provider';
         btn.classList.toggle('restore', isHidden);
     }
 }
@@ -2837,7 +2837,18 @@ function dualPairsFor(company, data) {
 function buildDualPair(info, cliSide) {
     const pair = document.createElement('div');
     pair.className = 'dual-pair' + (cliSide ? ' cli' : '');
-    if (!info) return pair;
+    if (!info) {
+        // This account simply doesn't have the pool (plans differ) — an
+        // explicit dash reads as "not on this account", where an empty cell
+        // read as missing data.
+        pair.classList.add('special', 'absent');
+        const dash = document.createElement('span');
+        dash.className = 'dual-absent-mark';
+        dash.textContent = '\u2013';
+        pair.title = 'This account has no such pool';
+        pair.appendChild(dash);
+        return pair;
+    }
     if (info.kind === 'summary') {
         pair.classList.add('special');
         pair.title = info.title || '';

@@ -634,14 +634,14 @@
                                     <label class="toggle-switch"><input type="checkbox" id="showClaudeCodeToggle"><span class="toggle-slider"></span></label>
                                     <span class="settings-row-label" title="Ingest your local claude CLI login's usage. Off: the widget only tracks accounts you signed into, and a detected CLI login shows as an offer chip instead">Pull from CLI</span>
                                     <label class="toggle-switch"><input type="checkbox" id="cliAdoptAnthropicToggle"><span class="toggle-slider"></span></label>
-                                    <span class="settings-row-label" title="Remove every mention of this provider from the widget (the header chip restores nothing — only this button does)">Provider</span>
-                                    <button class="settings-connect-btn provider-hide-btn" id="providerHideAnthropic">🧨 Hide</button>
+                                    
                                 </div>
                                 <div class="provider-col-login">
                                     <span class="settings-row-hint" id="anthropicLoginStatus">Not connected</span>
                                     <span class="settings-row-hint plain-storage-warning" id="plainStorageWarning" style="display:none;">⚠ No OS keychain available — stored logins sit unencrypted on this machine</span>
                                     <button class="settings-connect-btn" id="logoutBtn" title="Sign in to Claude.ai">Log In</button>
                                 </div>
+                                <button class="settings-connect-btn provider-hide-btn" id="providerHideAnthropic" title="Remove every mention of this provider from the widget until restored here">🧨 Hide provider</button>
                             </div>
                             <div class="provider-col">
                                 <div class="provider-col-title pct-openai">OpenAI</div>
@@ -654,14 +654,14 @@
                                     <label class="toggle-switch"><input type="checkbox" id="showCodexCliToggle"><span class="toggle-slider"></span></label>
                                     <span class="settings-row-label" title="Ingest your local codex CLI login's usage. Off: the widget only tracks accounts you signed into, and a detected CLI login shows as an offer chip instead">Pull from CLI</span>
                                     <label class="toggle-switch"><input type="checkbox" id="cliAdoptOpenaiToggle"><span class="toggle-slider"></span></label>
-                                    <span class="settings-row-label" title="Remove every mention of this provider from the widget">Provider</span>
-                                    <button class="settings-connect-btn provider-hide-btn" id="providerHideOpenai">🧨 Hide</button>
+                                    
                                 </div>
                                 <div class="provider-col-login">
                                     <span class="settings-row-hint" id="openaiLoginStatus">Not connected</span>
                                     <button class="settings-connect-btn" id="settingsConnectOpenaiBtn">Connect</button>
                                     <button class="disconnect-btn" id="disconnectOpenaiBtn" style="display: none;">Disconnect</button>
                                 </div>
+                                <button class="settings-connect-btn provider-hide-btn" id="providerHideOpenai" title="Remove every mention of this provider from the widget until restored here">🧨 Hide provider</button>
                             </div>
                             <div class="provider-col">
                                 <div class="provider-col-title pct-google">Google</div>
@@ -674,8 +674,7 @@
                                     <label class="toggle-switch"><input type="checkbox" id="showGeminiCliToggle"><span class="toggle-slider"></span></label>
                                     <span class="settings-row-label" title="Ingest your local gemini/Antigravity CLI login's usage. Off: the widget only tracks accounts you signed into, and a detected CLI login shows as an offer chip instead">Pull from CLI</span>
                                     <label class="toggle-switch"><input type="checkbox" id="cliAdoptGoogleToggle"><span class="toggle-slider"></span></label>
-                                    <span class="settings-row-label" title="Remove every mention of this provider from the widget">Provider</span>
-                                    <button class="settings-connect-btn provider-hide-btn" id="providerHideGoogle">🧨 Hide</button>
+                                    
                                     <span class="settings-row-label" title="Which Google surface to meter. Antigravity is the only one that reports agent usage; Gemini reads the classic Code Assist quota.">Usage source</span>
                                     <select id="googleSource" class="settings-select">
                                         <option value="auto">Auto (Antigravity if present)</option>
@@ -688,6 +687,7 @@
                                     <button class="settings-connect-btn" id="settingsConnectGoogleBtn">Connect</button>
                                     <button class="disconnect-btn" id="disconnectGoogleBtn" style="display: none;">Disconnect</button>
                                 </div>
+                                <button class="settings-connect-btn provider-hide-btn" id="providerHideGoogle" title="Remove every mention of this provider from the widget until restored here">🧨 Hide provider</button>
                             </div>
                         </div>
 

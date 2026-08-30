@@ -2908,6 +2908,11 @@ body.theme-light .dual-table.hide-cli .dual-pill {
     color: #2dd4bf;
 }
 
+.dual-pair.absent .dual-absent-mark {
+    font-size: 11px;
+    color: #4a4f63;
+}
+
 body.theme-light .dual-special-value { color: #087f6b; }
 
 /* Wide mode: a banked OpenAI reset draws as the same glowing orb the tall
@@ -3526,6 +3531,11 @@ button:focus:not(:focus-visible) { outline: none; }
     display: inline-flex;
     align-items: center;
     gap: 5px;
+    /* Above the frozen wordmark's ice overhang, with a whisper of backdrop
+       so the address stays legible when icicles hang behind it. */
+    position: relative;
+    z-index: 6;
+    text-shadow: 0 1px 3px rgba(10, 12, 24, 0.9), 0 0 6px rgba(10, 12, 24, 0.55);
     /* Pinned to the header row's RIGHT edge (margin-left:auto soaks up the
        slack), so every provider's email sits in the same spot regardless of
        how wide the provider name renders. Wraps to its own right-aligned
@@ -3571,6 +3581,8 @@ button:focus:not(:focus-visible) { outline: none; }
     display: inline-flex;
     align-items: center;
     gap: 5px;
+    position: relative;
+    z-index: 6;
     order: 99;
     margin-left: auto;
     padding: 1px 8px;
@@ -3625,8 +3637,12 @@ body.no-pizazz .account-offer { animation: none; }
 /* When the email is hidden the dynamite still holds the right edge. */
 .account-email[style*="none"] + .provider-tnt { margin-left: auto; }
 
-/* Settings: the hide/restore button */
-.provider-hide-btn { padding: 2px 10px; }
+/* Settings: the hide/restore button — full-width column footer */
+.provider-hide-btn {
+    padding: 3px 10px;
+    width: 100%;
+    margin-top: 6px;
+}
 .provider-hide-btn.restore {
     border-color: rgba(45, 212, 191, 0.5);
     color: #7fd8c8;
