@@ -185,6 +185,7 @@
                         <span class="ice-wrap"><span class="section-name brand-anthropic" data-ice="Anthropic">Anthropic</span></span>
                     
                         <span class="account-email" id="emailAnthropic" title="Account signed in for this provider"><span class="account-email-text"></span><button class="account-email-hide" title="Hide account emails">–</button></span>
+                        <button class="provider-tnt" id="tntAnthropic" title="Permanently hide this provider (restore in Settings)">🧨</button>
                     </div>
                     <div class="section-body" id="bodyAnthropic">
                         <div class="usage-headers section-col-headers">
@@ -286,6 +287,7 @@
                         <span class="ice-wrap"><span class="section-name brand-openai" data-ice="OpenAI">OpenAI</span></span>
                     
                         <span class="account-email" id="emailOpenai" title="Account signed in for this provider"><span class="account-email-text"></span><button class="account-email-hide" title="Hide account emails">–</button></span>
+                        <button class="provider-tnt" id="tntOpenai" title="Permanently hide this provider (restore in Settings)">🧨</button>
                     </div>
                     <div class="section-body" id="bodyOpenai">
                         <div class="connect-row" id="connectRowOpenai" style="display: none;">
@@ -338,6 +340,7 @@
                         <span class="ice-wrap"><span class="section-name brand-google" data-ice="Google"><span class="g-b">G</span><span class="g-r">o</span><span class="g-y">o</span><span class="g-b">g</span><span class="g-g">l</span><span class="g-r">e</span></span></span>
                     
                         <span class="account-email" id="emailGoogle" title="Account signed in for this provider"><span class="account-email-text"></span><button class="account-email-hide" title="Hide account emails">–</button></span>
+                        <button class="provider-tnt" id="tntGoogle" title="Permanently hide this provider (restore in Settings)">🧨</button>
                     </div>
                     <div class="section-body" id="bodyGoogle">
                         <div class="connect-row" id="connectRowGoogle" style="display: none;">
@@ -629,6 +632,10 @@
                                     <span class="tray-color-pair"><input type="color" id="trayFableBg" title="Background"><input type="color" id="trayFableText" title="Number"></span>
                                     <span class="settings-row-label" title="Rows from your local claude CLI login">CLI account</span>
                                     <label class="toggle-switch"><input type="checkbox" id="showClaudeCodeToggle"><span class="toggle-slider"></span></label>
+                                    <span class="settings-row-label" title="Ingest your local claude CLI login's usage. Off: the widget only tracks accounts you signed into, and a detected CLI login shows as an offer chip instead">Pull from CLI</span>
+                                    <label class="toggle-switch"><input type="checkbox" id="cliAdoptAnthropicToggle"><span class="toggle-slider"></span></label>
+                                    <span class="settings-row-label" title="Remove every mention of this provider from the widget (the header chip restores nothing — only this button does)">Provider</span>
+                                    <button class="settings-connect-btn provider-hide-btn" id="providerHideAnthropic">🧨 Hide</button>
                                 </div>
                                 <div class="provider-col-login">
                                     <span class="settings-row-hint" id="anthropicLoginStatus">Not connected</span>
@@ -645,6 +652,10 @@
                                     <label class="toggle-switch"><input type="checkbox" id="showCodexToggle"><span class="toggle-slider"></span></label>
                                     <span class="settings-row-label" title="Track your codex CLI's login when it is a different account">CLI account</span>
                                     <label class="toggle-switch"><input type="checkbox" id="showCodexCliToggle"><span class="toggle-slider"></span></label>
+                                    <span class="settings-row-label" title="Ingest your local codex CLI login's usage. Off: the widget only tracks accounts you signed into, and a detected CLI login shows as an offer chip instead">Pull from CLI</span>
+                                    <label class="toggle-switch"><input type="checkbox" id="cliAdoptOpenaiToggle"><span class="toggle-slider"></span></label>
+                                    <span class="settings-row-label" title="Remove every mention of this provider from the widget">Provider</span>
+                                    <button class="settings-connect-btn provider-hide-btn" id="providerHideOpenai">🧨 Hide</button>
                                 </div>
                                 <div class="provider-col-login">
                                     <span class="settings-row-hint" id="openaiLoginStatus">Not connected</span>
@@ -661,6 +672,10 @@
                                     <label class="toggle-switch"><input type="checkbox" id="showGeminiToggle"><span class="toggle-slider"></span></label>
                                     <span class="settings-row-label" title="Track your gemini CLI's login when it is a different account">CLI account</span>
                                     <label class="toggle-switch"><input type="checkbox" id="showGeminiCliToggle"><span class="toggle-slider"></span></label>
+                                    <span class="settings-row-label" title="Ingest your local gemini/Antigravity CLI login's usage. Off: the widget only tracks accounts you signed into, and a detected CLI login shows as an offer chip instead">Pull from CLI</span>
+                                    <label class="toggle-switch"><input type="checkbox" id="cliAdoptGoogleToggle"><span class="toggle-slider"></span></label>
+                                    <span class="settings-row-label" title="Remove every mention of this provider from the widget">Provider</span>
+                                    <button class="settings-connect-btn provider-hide-btn" id="providerHideGoogle">🧨 Hide</button>
                                     <span class="settings-row-label" title="Which Google surface to meter. Antigravity is the only one that reports agent usage; Gemini reads the classic Code Assist quota.">Usage source</span>
                                     <select id="googleSource" class="settings-select">
                                         <option value="auto">Auto (Antigravity if present)</option>

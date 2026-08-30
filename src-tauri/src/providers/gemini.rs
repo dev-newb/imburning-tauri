@@ -231,7 +231,13 @@ pub fn normalize(quota: &Value) -> Option<Vec<Limit>> {
     Some(limits.into_iter().map(|(_, _, l)| l).collect())
 }
 
-pub async fn fetch(client: &reqwest::Client) -> Option<ProviderData> {
+/// A detected-but-unadopted gemini CLI login, for the offer chip.
+pub fn cli_offer_email() -> Option<Option<String>> {
+    let creds = read_creds()?;
+    Some(creds.id_token.as_deref().and_then(email_from_id_token))
+}
+
+pub async fn fetch(client: &reqwest::Client, cli_allowed: bool) -> Option<ProviderData> {
     // Widget-owned login first, CLI credentials second — see codex::fetch.
     let mut widget_login = false;
     let (token, email) = match crate::oauth::access_token(client, "google").await {
@@ -243,6 +249,9 @@ pub async fn fetch(client: &reqwest::Client) -> Option<ProviderData> {
             )
         }
         None => {
+            if !cli_allowed {
+                return None;
+            }
             let creds = read_creds()?;
             let token = access_token(client, &creds).await?;
             let email = creds.id_token.as_deref().and_then(email_from_id_token);

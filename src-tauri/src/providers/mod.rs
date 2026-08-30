@@ -58,6 +58,16 @@ impl ProviderData {
 /// Candidate credential directories for a CLI that keeps its login under
 /// `~/<dir>/<file>`. The Electron build also walks sandboxed copies; this
 /// covers the plain install plus the common Homebrew/XDG placements.
+/// Email claim out of a JWT payload — used to name detected CLI logins in
+/// the offer chips without any network traffic.
+pub fn jwt_email(token: &str) -> Option<String> {
+    use base64::Engine;
+    let payload = token.split('.').nth(1)?;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(payload).ok()?;
+    let claims: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    claims.get("email").and_then(|v| v.as_str()).map(String::from)
+}
+
 pub fn local_credential_files(dir: &str, file: &str) -> Vec<std::path::PathBuf> {
     let mut out = vec![];
     if let Some(home) = dirs::home_dir() {

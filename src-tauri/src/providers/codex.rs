@@ -163,7 +163,23 @@ fn normalize(json: &Value, widget_login: bool) -> Option<ProviderData> {
     })
 }
 
-pub async fn fetch(client: &reqwest::Client) -> Option<ProviderData> {
+/// A detected-but-unadopted CLI login, for the offer chip: Some(email) when
+/// ~/.codex/auth.json holds usable credentials. Local read only — no network.
+pub fn cli_offer_email() -> Option<Option<String>> {
+    let path = crate::providers::local_credential_files(".codex", "auth.json")
+        .into_iter()
+        .next()?;
+    let auth: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    auth.get("tokens")?.get("access_token")?.as_str()?;
+    let email = auth
+        .get("tokens")
+        .and_then(|t| t.get("id_token"))
+        .and_then(|v| v.as_str())
+        .and_then(crate::providers::jwt_email);
+    Some(email)
+}
+
+pub async fn fetch(client: &reqwest::Client, cli_allowed: bool) -> Option<ProviderData> {
     // A widget-owned OAuth login comes first: the user signed in through the
     // app itself, so it is the account they expect to see. CLI credentials
     // remain a fallback for people who do have codex installed.
@@ -180,7 +196,10 @@ pub async fn fetch(client: &reqwest::Client) -> Option<ProviderData> {
             ));
         }
     }
-    candidates.extend(read_candidates().into_iter().map(|c| (c, false)));
+    // Un-adopted CLI credentials stay invisible: no fallback account.
+    if cli_allowed {
+        candidates.extend(read_candidates().into_iter().map(|c| (c, false)));
+    }
 
     for (candidate, widget_login) in candidates {
         let mut req = client

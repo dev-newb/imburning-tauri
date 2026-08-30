@@ -508,6 +508,24 @@ function setupEventListeners() {
         });
     });
 
+    // Provider dynamite (header): Shockwave & Ash, then the permahide.
+    for (const prov of Object.keys(PERMAHIDE_SECTIONS)) {
+        const tnt = document.getElementById('tnt' + PERMAHIDE_TITLECASE[prov]);
+        if (tnt) tnt.addEventListener('click', (e) => { e.stopPropagation(); detonateProvider(prov); });
+        // Settings: Hide/Restore (no fireworks — the section is behind the panel)
+        const hideBtn = document.getElementById('providerHide' + PERMAHIDE_TITLECASE[prov]);
+        if (hideBtn) hideBtn.addEventListener('click', async () => {
+            const hidden = ((window._cachedSettings || {}).hiddenProviders || {})[prov] === true;
+            await setProviderHidden(prov, !hidden);
+        });
+        // Settings: pull-from-CLI adoption toggle
+        const adoptToggle = document.getElementById('cliAdopt' + PERMAHIDE_TITLECASE[prov] + 'Toggle');
+        if (adoptToggle) adoptToggle.addEventListener('change', async () => {
+            await window.electronAPI.setCliAdopted(prov, adoptToggle.checked);
+            await fetchUsageData({ forceProviders: true, refreshLocalCredentials: true });
+        });
+    }
+
     setupSoundSettings();
     elements.refreshBtn.addEventListener('click', async () => {
         debugLog('Refresh button clicked');
@@ -1793,6 +1811,185 @@ function renderAccountEmails(data) {
         } else {
             el.style.display = 'none';
         }
+    }
+}
+
+// ---- Provider permahide + CLI-account offers -------------------------------
+const PERMAHIDE_SECTIONS = {
+    anthropic: 'sectionAnthropic', openai: 'sectionOpenai', google: 'sectionGoogle'
+};
+const PERMAHIDE_TITLECASE = { anthropic: 'Anthropic', openai: 'Openai', google: 'Google' };
+
+// Permahidden providers vanish entirely (header included) until the Settings
+// Restore button brings them back. Display-only: fetching and history are
+// untouched, exactly like the roll-up.
+function applyProviderVisibility() {
+    const hidden = (window._cachedSettings || {}).hiddenProviders || {};
+    let visible = 0;
+    for (const [prov, secId] of Object.entries(PERMAHIDE_SECTIONS)) {
+        const sec = document.getElementById(secId);
+        if (!sec) continue;
+        const hide = hidden[prov] === true;
+        sec.style.display = hide ? 'none' : '';
+        if (!hide) visible++;
+    }
+    // Landscape lays providers out as grid columns — tell it how many remain.
+    elements.mainContent.style.setProperty('--vis-providers', Math.max(visible, 1));
+    // Settings buttons flip between Hide and Restore.
+    for (const prov of Object.keys(PERMAHIDE_SECTIONS)) {
+        const btn = document.getElementById('providerHide' + PERMAHIDE_TITLECASE[prov]);
+        if (!btn) continue;
+        const isHidden = hidden[prov] === true;
+        btn.textContent = isHidden ? 'Restore' : '\u{1F9E8} Hide';
+        btn.classList.toggle('restore', isHidden);
+    }
+}
+
+async function setProviderHidden(prov, hide) {
+    const hiddenProviders = { ...((window._cachedSettings || {}).hiddenProviders || {}) };
+    hiddenProviders[prov] = hide === true;
+    await _saveSettingsPatch({ hiddenProviders });
+    applyProviderVisibility();
+    if (typeof requestWindowFit === 'function') requestWindowFit();
+}
+
+// ---- Shockwave & Ash: the chosen detonation ----
+// White flash, an expanding shockwave ring from the dynamite, the content
+// charring and lifting away as embers — then the section collapses and the
+// permahide lands. With pizazz off it is a plain hide.
+function detonateProvider(prov) {
+    const sec = document.getElementById(PERMAHIDE_SECTIONS[prov]);
+    if (!sec) return;
+    if (document.body.classList.contains('no-pizazz')) {
+        setProviderHidden(prov, true);
+        return;
+    }
+    const tnt = document.getElementById('tnt' + PERMAHIDE_TITLECASE[prov]);
+    sec.classList.add('detonating');
+
+    // origin: the dynamite button, in section coordinates
+    const sr = sec.getBoundingClientRect();
+    const tr = tnt ? tnt.getBoundingClientRect() : sr;
+    const origin = { x: tr.left - sr.left + 9, y: tr.top - sr.top + 9 };
+
+    // flash
+    const flash = document.createElement('div');
+    flash.className = 'detonate-flash';
+    sec.appendChild(flash);
+    requestAnimationFrame(() => requestAnimationFrame(() => { flash.style.opacity = '0'; }));
+
+    // canvas: ring + ash + embers
+    const PAD = 120;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'detonate-fx';
+    sec.appendChild(canvas);
+    canvas.width = (sr.width + PAD * 2) * devicePixelRatio;
+    canvas.height = (sr.height + PAD * 2) * devicePixelRatio;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+
+    const parts = [{ ring: true, x: PAD + origin.x, y: PAD + origin.y }];
+    const count = Math.min(320, Math.round(sr.width * sr.height / 900));
+    for (let i = 0; i < count; i++) {
+        parts.push({
+            x: PAD + Math.random() * sr.width,
+            y: PAD + Math.random() * sr.height,
+            vx: (Math.random() - 0.5) * 55,
+            vy: -(40 + Math.random() * 130),
+            sz: 1.5 + Math.random() * 3,
+            ember: Math.random() < 0.3,
+            delay: 0.1 + Math.random() * 0.45,
+            life: 0.9 + Math.random()
+        });
+    }
+    const t0 = performance.now();
+    (function tick(now) {
+        const t = (now - t0) / 1000;
+        ctx.clearRect(0, 0, sr.width + PAD * 2, sr.height + PAD * 2);
+        let alive = false;
+        for (const p of parts) {
+            if (p.ring) {
+                if (t > 0.55) continue;
+                alive = true;
+                const rad = t * 620;
+                const a = Math.max(0, 1 - t / 0.55);
+                ctx.save();
+                ctx.globalAlpha = a * 0.85;
+                ctx.strokeStyle = '#e8f6ff';
+                ctx.lineWidth = 3 + (1 - a) * 6;
+                ctx.shadowColor = '#7fd8ff';
+                ctx.shadowBlur = 18;
+                ctx.beginPath(); ctx.arc(p.x, p.y, rad, 0, 7); ctx.stroke();
+                ctx.restore();
+                continue;
+            }
+            const tt = t - p.delay;
+            if (tt < 0) { alive = true; continue; }
+            if (tt > p.life) continue;
+            alive = true;
+            const a = Math.max(0, 1 - tt / p.life);
+            const x = p.x + p.vx * tt + Math.sin((p.y + tt * 7) * 0.7) * 6 * tt;
+            const y = p.y + p.vy * tt;
+            ctx.globalAlpha = a * (p.ember ? 0.95 : 0.6);
+            ctx.fillStyle = p.ember ? (tt < p.life * 0.4 ? '#ffb454' : '#d24b3f') : '#9aa0b4';
+            ctx.fillRect(x, y, p.sz, p.sz);
+            ctx.globalAlpha = 1;
+        }
+        if (alive && now - t0 < 2000) requestAnimationFrame(tick);
+        else { canvas.remove(); flash.remove(); }
+    })(t0);
+
+    // shake the widget, char the section, collapse it, then commit the hide
+    document.body.classList.add('detonate-shake');
+    setTimeout(() => document.body.classList.remove('detonate-shake'), 520);
+    sec.style.transition = 'filter 0.4s ease';
+    sec.style.filter = 'brightness(0.35) saturate(0.4)';
+    setTimeout(() => {
+        const h = sec.offsetHeight;
+        sec.style.height = h + 'px';
+        sec.style.overflow = 'hidden';
+        sec.style.transition = 'height 0.6s cubic-bezier(.5,0,.7,1), opacity 0.6s ease';
+        requestAnimationFrame(() => { sec.style.height = '0px'; sec.style.opacity = '0'; });
+        setTimeout(async () => {
+            await setProviderHidden(prov, true);
+            sec.classList.remove('detonating');
+            // reset inline styles so a Settings restore comes back clean
+            sec.style.height = sec.style.opacity = sec.style.filter =
+                sec.style.overflow = sec.style.transition = '';
+        }, 640);
+    }, 320);
+}
+
+// Detected CLI logins the user has not adopted: a pulsing chip in the header.
+// Clicking it pulls that account into the stats (the first empty slot — CLI
+// data lands wherever the pipeline already puts it: primary if nothing else
+// is signed in, second account otherwise).
+function renderAccountOffers(data) {
+    const offers = data.offers || {};
+    for (const prov of Object.keys(PERMAHIDE_SECTIONS)) {
+        const P = PERMAHIDE_TITLECASE[prov];
+        const emailEl = document.getElementById('email' + P);
+        if (!emailEl) continue;
+        let chip = document.getElementById('offer' + P);
+        const offer = offers[prov];
+        if (!offer) { if (chip) chip.remove(); continue; }
+        if (!chip) {
+            chip = document.createElement('button');
+            chip.id = 'offer' + P;
+            chip.className = 'account-offer';
+            chip.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                chip.disabled = true;
+                chip.textContent = 'Pulling\u2026';
+                await window.electronAPI.setCliAdopted(prov, true);
+                await fetchUsageData({ forceProviders: true, refreshLocalCredentials: true });
+            });
+            emailEl.insertAdjacentElement('afterend', chip);
+        }
+        const who = offer.email || offer.label || 'CLI login';
+        chip.textContent = '\u26A1 ' + who + ' \u2014 click to track';
+        chip.title = 'Found a ' + (offer.label || 'CLI login') + ' on this machine. '
+            + 'Click to pull its usage into the widget \u2014 nothing is read until you do.';
     }
 }
 
@@ -3119,6 +3316,8 @@ function updateUI(data) {
     // their own email in the provider payload, whether signed in through the
     // app or read from a CLI login on disk.
     renderAccountEmails(data);
+    renderAccountOffers(data);
+    applyProviderVisibility();
     // The amber pill IS the CLI subheading now — give it the account detail
     const pillTitle = (sel, t) => { const b = document.querySelector(sel); if (b) b.title = t; };
     pillTitle('#sgOpenaiCli .subheading', cxStatus && cxStatus.cli
@@ -4622,6 +4821,11 @@ async function loadSettings() {
     if (elements.dailyDigestToggle) elements.dailyDigestToggle.checked = settings.dailyDigest !== false;
     if (elements.sortByUsageToggle) elements.sortByUsageToggle.checked = settings.sortByUsage === true;
     if (elements.showAccountEmailsToggle) elements.showAccountEmailsToggle.checked = settings.hideAccountEmails !== true;
+    for (const prov of Object.keys(PERMAHIDE_SECTIONS)) {
+        const t = document.getElementById('cliAdopt' + PERMAHIDE_TITLECASE[prov] + 'Toggle');
+        if (t) t.checked = (settings.cliAdopted || {})[prov] === true;
+    }
+    applyProviderVisibility();
     if (elements.showCodexToggle) elements.showCodexToggle.checked = settings.showCodex !== false;
     if (elements.showCodexCliToggle) elements.showCodexCliToggle.checked = settings.showCodexCli !== false;
     if (elements.showGeminiToggle) elements.showGeminiToggle.checked = settings.showGemini !== false;

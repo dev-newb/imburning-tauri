@@ -41,17 +41,60 @@ impl Cache {
     }
 }
 
+/// CLI-account adoption (consent). CLI-borrowed credentials never feed the
+/// stats until adopted; a fresh install detects them and offers instead. An
+/// install that already showed CLI-derived data is grandfathered as adopted.
+/// Mirrors the Electron build's cliAdoptionState().
+fn cli_adopted(store: &Store) -> (bool, bool, bool) {
+    if let Some(v) = store.get("settings.cliAdopted") {
+        if v.is_object() {
+            let flag = |k: &str| v.get(k).and_then(|b| b.as_bool()).unwrap_or(false);
+            return (flag("anthropic"), flag("openai"), flag("google"));
+        }
+    }
+    let existing = store.get("latestUsageData").is_some();
+    store.set(
+        "settings.cliAdopted",
+        json!({ "anthropic": existing, "openai": existing, "google": existing }),
+    );
+    (existing, existing, existing)
+}
+
+/// Detected-but-unadopted CLI logins, for the renderer's offer chips.
+/// Local reads only — nothing an unadopted account owns goes on the wire.
+fn detect_cli_offers(adopted: (bool, bool, bool)) -> Value {
+    let mut offers = serde_json::Map::new();
+    if !adopted.0 && claude_code::available() {
+        offers.insert("anthropic".into(), json!({ "email": Value::Null, "label": "Claude Code CLI login" }));
+    }
+    if !adopted.1 {
+        if let Some(email) = codex::cli_offer_email() {
+            offers.insert("openai".into(), json!({ "email": email, "label": "codex CLI login" }));
+        }
+    }
+    if !adopted.2 {
+        let gem = gemini::cli_offer_email();
+        if gem.is_some() || antigravity::available() {
+            offers.insert("google".into(), json!({ "email": gem.flatten(), "label": "gemini CLI login" }));
+        }
+    }
+    Value::Object(offers)
+}
+
 /// Which Google surface feeds the section. "auto" prefers Antigravity when an
 /// agy login exists (the only surface that meters agent usage) and otherwise
 /// falls back to the classic Code Assist quota. Gemini is never removed as an
 /// option — "gemini" forces it.
-async fn google(client: &reqwest::Client, store: &Store) -> Option<ProviderData> {
+async fn google(client: &reqwest::Client, store: &Store, cli_allowed: bool) -> Option<ProviderData> {
     let source = store
         .get_or("settings.googleSource", json!("auto"))
         .as_str()
         .unwrap_or("auto")
         .to_string();
-    let want_antigravity = source == "antigravity" || (source == "auto" && antigravity::available());
+    // Antigravity rides the agy CLI's keychain credentials wholesale, so the
+    // whole surface is gated on Google CLI adoption.
+    let want_antigravity = cli_allowed
+        && (source == "antigravity" || (source == "auto" && antigravity::available()));
     if want_antigravity {
         if let Some(data) = antigravity::fetch(client, store).await {
             return Some(data);
@@ -60,7 +103,7 @@ async fn google(client: &reqwest::Client, store: &Store) -> Option<ProviderData>
             return None; // forced: do not silently fall back
         }
     }
-    gemini::fetch(client).await
+    gemini::fetch(client, cli_allowed).await
 }
 
 /// `app` is optional so the fetch can run before the UI exists; without it the
@@ -83,11 +126,12 @@ pub async fn fetch_all(
     let show_codex = store.get_or("settings.showCodex", json!(true)).as_bool().unwrap_or(true)
         || store.get_or("settings.showCodexCli", json!(true)).as_bool().unwrap_or(true);
 
+    let adopted = cli_adopted(store);
     // Independent network calls — run them concurrently, not in sequence.
     let (anthropic, codex_data, google_data) = tokio::join!(
-        async { if claude_code::available() { claude_code::fetch(client).await } else { None } },
-        async { if show_codex { codex::fetch(client).await } else { None } },
-        async { if show_google { google(client, store).await } else { None } },
+        async { if adopted.0 && claude_code::available() { claude_code::fetch(client).await } else { None } },
+        async { if show_codex { codex::fetch(client, adopted.1).await } else { None } },
+        async { if show_google { google(client, store, adopted.2).await } else { None } },
     );
 
     let mut data = json!({
@@ -165,6 +209,8 @@ pub async fn fetch_all(
     if let Some(g) = google_data {
         data["gemini"] = serde_json::to_value(g).unwrap_or(Value::Null);
     }
+
+    data["offers"] = detect_cli_offers(adopted);
 
     // History records the UNFILTERED document: the visibility toggles are a
     // display choice and must never change which series get recorded.

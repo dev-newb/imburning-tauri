@@ -119,6 +119,8 @@
     runMacUpdate: noop,
 
     // ---- notifications ----
+    setCliAdopted: (provider, adopted) =>
+      invoke('set_cli_adopted', { provider: String(provider || ''), adopted: adopted === true }),
     showNotification: async (title, body) => {
       const api = window.__TAURI__.notification;
       let granted = await api.isPermissionGranted();

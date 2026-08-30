@@ -63,6 +63,7 @@ fn defaults() -> Value {
             "banked": { "enabled": true, "path": Value::Null, "volume": 0.85 },
             "wall":   { "enabled": true, "path": Value::Null, "volume": 0.85 }
         },
+        "hiddenProviders": {},
         "hiddenRows": {},
         "hiddenRowsSeeded": {},
         "chartHiddenSeries": {}

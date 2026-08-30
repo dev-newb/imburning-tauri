@@ -53,6 +53,24 @@ fn get_settings(state: State<'_, std::sync::Arc<AppState>>) -> Value {
 }
 
 #[tauri::command]
+fn set_cli_adopted(
+    state: State<'_, std::sync::Arc<AppState>>,
+    provider: String,
+    adopted: bool,
+) -> Value {
+    if !["anthropic", "openai", "google"].contains(&provider.as_str()) {
+        return json!({ "ok": false });
+    }
+    let mut current = state
+        .store
+        .get_or("settings.cliAdopted", json!({}));
+    current[provider] = json!(adopted);
+    state.store.set("settings.cliAdopted", current.clone());
+    state.cache.clear();
+    json!({ "ok": true, "state": current })
+}
+
+#[tauri::command]
 fn save_settings(window: tauri::Window, state: State<'_, std::sync::Arc<AppState>>, settings: Value) -> Value {
     // Settings with a window side effect have to be APPLIED here, not merely
     // stored: the config hard-codes alwaysOnTop, so without this the toggle
@@ -1259,6 +1277,7 @@ fn main() {
             get_latest_usage,
             get_settings,
             save_settings,
+            set_cli_adopted,
             get_credentials,
             anthropic_login,
             oauth_connect,
