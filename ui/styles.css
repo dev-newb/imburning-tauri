@@ -833,6 +833,10 @@ body.theme-light .provider-section {
     cursor: pointer;
     flex-shrink: 0;
     transition: color 0.15s ease, background 0.15s ease;
+    /* Nudged left, extra clearance right: the frozen wordmark's ice block
+       overhangs its box and was creeping over the eye. */
+    margin-left: -4px;
+    margin-right: 11px;
 }
 
 .section-eye:hover {
