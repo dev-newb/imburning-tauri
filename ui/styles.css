@@ -2374,63 +2374,53 @@ body.tall .progress-bar { min-width: 56px; }
     border-left: 3px solid var(--co, transparent);
     padding-left: 6px;
 }
-/* Second account: the rail goes dashed and the code carries a circled 2 —
-   where a trailing underscore used to be the only hint. */
-.compact-row.acct2 { border-left-style: dashed; }
-.compact-n2 {
-    display: inline-grid;
-    place-items: center;
-    width: 11px;
-    height: 11px;
-    margin-left: 3px;
-    border: 1px solid currentColor;
-    border-radius: 50%;
-    font-size: 7px;
-    line-height: 1;
-    vertical-align: 1px;
-    opacity: 0.9;
-}
-/* Account legend: one chip per tracked account, sharing the row rail
-   language (solid = first, dashed = second). Chips are the compact-mode
-   hide/restore controls; they read and write the same settings the full
-   view's chevrons and DESKTOP/CLI pills use. */
-.compact-legend {
+/* Account ribbons (option A): one thin label row per tracked account —
+   provider in its colour, the email, a CLI badge for a second account.
+   They are compact's hide/restore controls too (same settings the full
+   view writes); a hidden account keeps a dimmed ribbon as the way back. */
+.compact-ribbon {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
     flex: 0 0 auto;
-    min-height: 13px;
-    padding-left: 9px;
-    margin-top: 1px;
-}
-.compact-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 0 3px;
+    min-height: 14px;
+    margin-top: 2px;
+    padding: 0 4px 0 6px;
     border: none;
+    border-left: 3px solid var(--co);
+    border-radius: 0 4px 4px 0;
     background: transparent;
-    color: #7a7f96;
+    color: #9aa0b8;
     font-size: 9px;
-    letter-spacing: 0.2px;
+    letter-spacing: 0.02em;
     cursor: pointer;
-    border-radius: 4px;
+    text-align: left;
     white-space: nowrap;
+    overflow: hidden;
 }
-.compact-chip::before {
-    content: '';
-    width: 3px;
-    height: 9px;
-    border-radius: 2px;
-    background: var(--co);
+.compact-ribbon-provider {
+    color: var(--co);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-size: 8px;
 }
-.compact-chip.cli::before {
-    background: repeating-linear-gradient(180deg, var(--co) 0 2px, transparent 2px 4px);
+.compact-ribbon-email { overflow: hidden; text-overflow: ellipsis; }
+.compact-ribbon-badge {
+    padding: 0 4px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    font-size: 7.5px;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    color: #b0b5c9;
 }
-.compact-chip:hover { background: rgba(255, 255, 255, 0.07); color: #c0c4d6; }
-.compact-chip.off { opacity: 0.45; text-decoration: line-through; }
-body.theme-light .compact-chip { color: #6b6f80; }
-body.theme-light .compact-chip:hover { background: rgba(0, 0, 0, 0.06); color: #1c1b2a; }
+.compact-ribbon:hover { background: rgba(255, 255, 255, 0.06); color: #d0d4e4; }
+.compact-ribbon.off { opacity: 0.45; }
+.compact-ribbon.off .compact-ribbon-email { text-decoration: line-through; }
+body.theme-light .compact-ribbon { color: #5c6072; }
+body.theme-light .compact-ribbon:hover { background: rgba(0, 0, 0, 0.05); color: #1c1b2a; }
+body.theme-light .compact-ribbon-badge { background: rgba(0, 0, 0, 0.07); color: #4a4f63; }
 
 .compact-row .compact-label {
     width: 54px;   /* room for "CDX 7D" plus the second-account badge */

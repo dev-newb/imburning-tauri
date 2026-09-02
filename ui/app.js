@@ -3774,85 +3774,80 @@ function updateCompactBars(data) {
         visiblePools.sort((a, b) => (coOrder[a.co] - coOrder[b.co]) || (b.pct - a.pct));
     }
 
-    // Account legend per provider: one chip per tracked account, dashed
-    // swatch for the second, click to hide/restore. Drawn even when every
-    // row of the provider is hidden — that is the way back from compact.
+    // Option A — account ribbons. One thin label row per tracked account
+    // (provider · email · CLI badge) with that account's pools beneath it.
+    // Ribbons are also compact's hide/restore controls: clicking one toggles
+    // the same setting the full view's chevron / DESKTOP-CLI pill writes, so
+    // the two layouts never disagree. A hidden account keeps its ribbon
+    // (dimmed) — that is the way back from compact.
     const emailOf = {
         anthropic: { desk: data.anthropic_email || null, cli: data.claude_code?.email || null },
         openai: { desk: data.codex?.email || null, cli: data.codex?.cli?.email || null },
         google: { desk: data.gemini?.email || null, cli: data.gemini?.cli?.email || null }
     };
-    const chipName = (email, fallback) => email ? String(email).split('@')[0] : fallback;
     const providerName = { anthropic: 'Anthropic', openai: 'OpenAI', google: 'Google' };
-    let legendCount = 0;
-    const buildLegend = (co) => {
-        const hasDesk = livePools.some((p) => p.co === co && !p.cli);
-        const hasCli = livePools.some((p) => p.co === co && p.cli);
-        if (!hasDesk && !hasCli) return null;
-        const legend = document.createElement('div');
-        legend.className = 'compact-legend';
-        legend.style.setProperty('--co', COMPANY_COLORS[co]);
-        const dual = hasDesk && hasCli;
+    let ribbonCount = 0;
+    const buildRibbon = (co, side, dual) => {
+        const isCli = side === 'cli';
         const collapsed = !!_sec[co];
-        const mkChip = (side) => {
-            const chip = document.createElement('button');
-            const isCli = side === 'cli';
-            const hidden = collapsed || !!_sub[co + '_' + side];
-            chip.className = 'compact-chip' + (isCli ? ' cli' : '') + (hidden ? ' off' : '');
-            const full = emailOf[co][isCli ? 'cli' : 'desk'];
-            // No email known (e.g. Antigravity): fall back to the provider name,
-            // not a generic "desktop".
-            chip.textContent = chipName(full, isCli ? 'CLI' : providerName[co]) + (isCli && dual ? ' \u00b7 CLI' : '');
-            chip.title = (full ? full + ' \u2014 ' : '') + (hidden
-                ? 'hidden here and in the full view \u2014 click to show'
-                : 'click to hide this account, here and in the full view');
-            chip.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const settings = window._cachedSettings || await window.electronAPI.getSettings();
-                if (collapsed) {
-                    // a rolled-up provider: any chip restores it
-                    await _saveSettingsPatch({ sectionCollapsed: { ...(settings.sectionCollapsed || {}), [co]: false } });
-                } else if (dual) {
-                    const key = co + '_' + side;
-                    await _saveSettingsPatch({ subgroupHidden: { ...(settings.subgroupHidden || {}), [key]: !_sub[key] } });
-                } else {
-                    // single account: hiding it IS rolling the provider up
-                    await _saveSettingsPatch({ sectionCollapsed: { ...(settings.sectionCollapsed || {}), [co]: true } });
-                }
-                applySectionStates(window._cachedSettings);
-                applySubgroups();
-                if (latestUsageData) updateUI(latestUsageData);
-            });
-            return chip;
-        };
-        if (hasDesk) legend.appendChild(mkChip('desktop'));
-        if (hasCli) legend.appendChild(mkChip('cli'));
-        legendCount++;
-        return legend;
+        const hidden = collapsed || !!_sub[co + '_' + side];
+        const ribbon = document.createElement('button');
+        ribbon.className = 'compact-ribbon' + (hidden ? ' off' : '');
+        ribbon.style.setProperty('--co', COMPANY_COLORS[co]);
+        const prov = document.createElement('span');
+        prov.className = 'compact-ribbon-provider';
+        prov.textContent = providerName[co];
+        ribbon.appendChild(prov);
+        const email = emailOf[co][isCli ? 'cli' : 'desk'];
+        const who = document.createElement('span');
+        who.className = 'compact-ribbon-email';
+        who.textContent = email || (isCli ? 'CLI login' : 'signed-in account');
+        ribbon.appendChild(who);
+        if (isCli && dual) {
+            const badge = document.createElement('span');
+            badge.className = 'compact-ribbon-badge';
+            badge.textContent = 'CLI';
+            ribbon.appendChild(badge);
+        }
+        ribbon.title = hidden ? 'Hidden here and in the full view \u2014 click to show'
+            : 'Click to hide this account, here and in the full view';
+        ribbon.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const settings = window._cachedSettings || await window.electronAPI.getSettings();
+            if (collapsed) {
+                await _saveSettingsPatch({ sectionCollapsed: { ...(settings.sectionCollapsed || {}), [co]: false } });
+            } else if (dual) {
+                const key = co + '_' + side;
+                await _saveSettingsPatch({ subgroupHidden: { ...(settings.subgroupHidden || {}), [key]: !_sub[key] } });
+            } else {
+                await _saveSettingsPatch({ sectionCollapsed: { ...(settings.sectionCollapsed || {}), [co]: true } });
+            }
+            applySectionStates(window._cachedSettings);
+            applySubgroups();
+            if (latestUsageData) updateUI(latestUsageData);
+        });
+        ribbonCount++;
+        return ribbon;
     };
 
     container.innerHTML = '';
     for (const co of Object.keys(coOrder)) {
-        const legend = buildLegend(co);
-        if (legend) container.appendChild(legend);
-        for (const p of visiblePools.filter((q) => q.co === co)) {
+        const hasDesk = livePools.some((p) => p.co === co && !p.cli);
+        const hasCli = livePools.some((p) => p.co === co && p.cli);
+        const dual = hasDesk && hasCli;
+        for (const side of ['desktop', 'cli']) {
+            if (side === 'desktop' ? !hasDesk : !hasCli) continue;
+            container.appendChild(buildRibbon(co, side, dual));
+            for (const p of visiblePools.filter((q) => q.co === co && (side === 'cli') === !!q.cli)) {
         const row = document.createElement('div');
-        row.className = 'compact-row' + (p.cli ? ' acct2' : '');
+        row.className = 'compact-row';
         row.style.setProperty('--co', COMPANY_COLORS[p.co]);
-        row.title = (p.cli ? 'Second account \u2014 ' : '') + p.name.replace(/^CLI /, '');
+        row.title = p.name.replace(/^CLI /, '');
 
         const labelEl = document.createElement('span');
         labelEl.className = 'compact-label';
         labelEl.style.color = p.color;
         labelEl.textContent = p.code;
-        if (p.cli) {
-            // The circled 2 replaces the old trailing underscore: an explicit
-            // "second account" mark instead of a wink.
-            const n2 = document.createElement('span');
-            n2.className = 'compact-n2';
-            n2.textContent = '2';
-            labelEl.appendChild(n2);
-        }
         row.appendChild(labelEl);
 
         const wrap = document.createElement('div');
@@ -3901,13 +3896,14 @@ function updateCompactBars(data) {
         wrap.appendChild(bg);
         row.appendChild(wrap);
         container.appendChild(row);
+            }
         }
     }
 
     // the rows container stretches to fill the window (so bars can expand
     // when the user makes it bigger), which makes measuring it circular.
     if (isCompactMode) {
-        window.electronAPI.resizeWindow(_chromeHeight() + visiblePools.length * 26 + legendCount * 14 + 18);
+        window.electronAPI.resizeWindow(_chromeHeight() + visiblePools.length * 26 + ribbonCount * 15 + 18);
     }
 }
 // Persist compact mode setting without touching the rest of settings — debounced
