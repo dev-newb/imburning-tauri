@@ -3213,7 +3213,8 @@ body.no-pizazz .compact-bar-fill .fx {
 
 .compact-row.compact-orbs .reset-dots {
     flex: 1;
-    justify-content: flex-start;
+    /* Centred where the bar would be, matching the other layouts. */
+    justify-content: center;
     gap: clamp(5px, 4%, 13px);
     padding: 0 2px;
 }
