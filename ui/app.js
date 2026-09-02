@@ -3746,6 +3746,20 @@ function updateCompactBars(data) {
         pools.push({ co: 'openai', code: 'RST', name: rstName,
             pct: 0, color: CODE_COLORS.codex, orbs: Math.min(compactResets.available, 12) });
     }
+    // The second (CLI) account banks its own resets — the wide view shows
+    // both; compact only ever read the desktop account's.
+    const cliResets = data.codex?.cli?.resetCredits;
+    if (cliResets && cliResets.available > 0
+        && (data.codex?.cli?.limits || []).length && !hiddenRows['codex_cli_row_resets']) {
+        const credits = Array.isArray(cliResets.credits) ? cliResets.credits : [];
+        const name = credits.length
+            ? 'Limit Resets\n' + credits.map((c, i) => c.expiresAt
+                ? `${i + 1}. expires in ${formatCountdown(Math.max(c.expiresAt - Date.now(), 0))}`
+                : `${i + 1}. no expiry reported`).join('\n')
+            : 'Limit Resets';
+        pools.push({ co: 'openai', cli: true, code: 'RST', name: 'CLI ' + name,
+            pct: 0, color: CODE_COLORS.codex, orbs: Math.min(cliResets.available, 12) });
+    }
     (data.gemini?.limits || []).forEach((lim, i) => {
         if (hiddenRows['gemini_' + lim.key]) return;
         pools.push({ co: 'google', code: rowCode('gemini_' + lim.key, lim.label), name: lim.label, pct: clamp(lim.percent), color: GEMINI_BLUES[i % GEMINI_BLUES.length], burnKey: 'gemini_' + lim.key });
