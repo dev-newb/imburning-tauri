@@ -65,19 +65,26 @@
                 </button>
                 <div class="toolbar-group toolbar-group-play">
                     <button class="control-btn press-btn" id="compactPressBtn" title="Compact mode — squeeze the widget down">
-                        <!-- Slinky: coils at full length in normal mode, bunched
-                             down onto the base plate when compact is on. -->
-                        <!-- Coils are open arcs, not closed ellipses: half the ink,
-                             so the gaps survive at the small compact size. -->
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-                            <path class="sl-plate" d="M4.5 3.5h15" />
-                            <g class="sl-coils">
-                                <path d="M5 6a7 1.8 0 0 0 14 0" />
-                                <path d="M5 9.8a7 1.8 0 0 0 14 0" />
-                                <path d="M5 13.6a7 1.8 0 0 0 14 0" />
-                                <path d="M5 17.4a7 1.8 0 0 0 14 0" />
+                        <!-- Slinky: a side-on helix at a stretched pitch. Entering compact
+                             compresses it (with sparks) and the pose holds while compact is
+                             on; see the .sl-* rules in styles.css. -->
+                        <svg class="sl" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                            <g class="sl-sparks" stroke-width="1.6">
+                                <line class="sl-s" style="--r:-100deg;--d:6.5px;--t:0ms" x1="12" y1="19.5" x2="12" y2="16.9" stroke="#ffd166" />
+                                <line class="sl-s" style="--r:100deg;--d:6px;--t:30ms" x1="12" y1="19.5" x2="12" y2="16.9" stroke="#ffb347" />
+                                <line class="sl-s" style="--r:-125deg;--d:5px;--t:60ms" x1="12" y1="19.5" x2="12" y2="16.9" stroke="#ff7b54" />
+                                <line class="sl-s" style="--r:125deg;--d:5.5px;--t:20ms" x1="12" y1="19.5" x2="12" y2="16.9" stroke="#ffd166" />
+                                <line class="sl-s" style="--r:-75deg;--d:7px;--t:50ms" x1="12" y1="19.5" x2="12" y2="16.9" stroke="#ffb347" />
+                                <line class="sl-s" style="--r:75deg;--d:6.5px;--t:80ms" x1="12" y1="19.5" x2="12" y2="16.9" stroke="#ff9f43" />
+                                <line class="sl-s" style="--r:-150deg;--d:4px;--t:40ms" x1="12" y1="19.5" x2="12" y2="16.9" stroke="#ff7b54" />
+                                <line class="sl-s" style="--r:150deg;--d:4.5px;--t:70ms" x1="12" y1="19.5" x2="12" y2="16.9" stroke="#ffd166" />
                             </g>
-                            <path d="M4.5 20.5h15" />
+                            <g class="sl-cw" style="--i:5"><ellipse class="sl-c" cx="12" cy="3.5" rx="6.6" ry="2.1" /></g>
+                            <g class="sl-cw" style="--i:4"><ellipse class="sl-c" cx="12" cy="6.8" rx="6.6" ry="2.1" /></g>
+                            <g class="sl-cw" style="--i:3"><ellipse class="sl-c" cx="12" cy="10.1" rx="6.6" ry="2.1" /></g>
+                            <g class="sl-cw" style="--i:2"><ellipse class="sl-c" cx="12" cy="13.4" rx="6.6" ry="2.1" /></g>
+                            <g class="sl-cw" style="--i:1"><ellipse class="sl-c" cx="12" cy="16.7" rx="6.6" ry="2.1" /></g>
+                            <g class="sl-cw" style="--i:0"><ellipse class="sl-c" cx="12" cy="20" rx="6.6" ry="2.1" /></g>
                         </svg>
                     </button>
                     <!-- The one full-colour character in the blueprint world. Jailing

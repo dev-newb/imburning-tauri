@@ -720,6 +720,7 @@ function setupEventListeners() {
     const pressBtn = document.getElementById('compactPressBtn');
     pressBtn.addEventListener('click', async () => {
         const compact = !isCompactMode;
+        if (compact) sparkPressBtn(pressBtn);
         applyCompactMode(compact);
         await _saveCompactSetting(compact);
     });
@@ -3644,6 +3645,17 @@ function applyPizazz(on) {
             ? 'Pizazz: ON — click to jail the clown and turn off all visual effects'
             : 'Pizazz: OFF — the clown weeps behind bars. Click to free him and the sparkles.';
     }
+}
+
+// Sparks fly when the slinky slams down. The class is transient so every
+// entry into compact mode re-fires the burst; startup restores of compact
+// mode go through applyCompactMode directly and stay silent.
+function sparkPressBtn(btn) {
+    btn.classList.remove('sparking');
+    void btn.offsetWidth; // restart a burst that is still running
+    btn.classList.add('sparking');
+    clearTimeout(btn._sparkTimer);
+    btn._sparkTimer = setTimeout(() => btn.classList.remove('sparking'), 700);
 }
 
 function applyCompactMode(compact) {
