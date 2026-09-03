@@ -689,7 +689,7 @@ function setupEventListeners() {
     elements.refreshLocalLoginsBtn.addEventListener('click', refreshLocalLogins);
 
     elements.githubBtn.addEventListener('click', () => {
-        window.electronAPI.openExternal('https://github.com/dev-newb/imburning');
+        window.electronAPI.openExternal('https://github.com/dev-newb/imburning-electron');
     });
 
     document.getElementById('coffeeBtn').addEventListener('click', () => {
@@ -906,7 +906,7 @@ function setupEventListeners() {
             elements.updateBannerText.textContent = '▲  Updating — reopens when the rebuild finishes';
             window.electronAPI.runMacUpdate();
         } else {
-            window.electronAPI.openExternal(`https://github.com/dev-newb/imburning/releases/latest`);
+            window.electronAPI.openExternal(`https://github.com/dev-newb/imburning-electron/releases/latest`);
         }
     };
     elements.updateBannerText.addEventListener('click', applyUpdateClick);
