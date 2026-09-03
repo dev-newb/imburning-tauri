@@ -688,8 +688,13 @@ function setupEventListeners() {
     elements.logoutBtn.addEventListener('click', handleAnthropicAuthAction);
     elements.refreshLocalLoginsBtn.addEventListener('click', refreshLocalLogins);
 
+    // The renderer is shared by both builds, so the repo link has to know
+    // which runtime it is in — the Tauri build gets its own repo.
+    const APP_REPO = window.__TAURI__
+        ? 'https://github.com/dev-newb/imburning-tauri'
+        : 'https://github.com/dev-newb/imburning-electron';
     elements.githubBtn.addEventListener('click', () => {
-        window.electronAPI.openExternal('https://github.com/dev-newb/imburning-electron');
+        window.electronAPI.openExternal(APP_REPO);
     });
 
     document.getElementById('coffeeBtn').addEventListener('click', () => {
@@ -906,7 +911,7 @@ function setupEventListeners() {
             elements.updateBannerText.textContent = '▲  Updating — reopens when the rebuild finishes';
             window.electronAPI.runMacUpdate();
         } else {
-            window.electronAPI.openExternal(`https://github.com/dev-newb/imburning-electron/releases/latest`);
+            window.electronAPI.openExternal(`${APP_REPO}/releases/latest`);
         }
     };
     elements.updateBannerText.addEventListener('click', applyUpdateClick);
