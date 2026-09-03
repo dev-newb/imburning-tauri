@@ -3395,12 +3395,12 @@ body.compact-mode .title span { white-space: nowrap; }
 .local-login-refresh-btn:hover .bp-cursor { animation: cursorBlink 0.9s steps(1) infinite; }
 @keyframes cursorBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 
-/* Slinky (compact button): a side-on helix at a stretched pitch. Hover sways
-   the coils; entering compact drives every coil toward the base — the pitch
+/* Slinky (compact button): a side-on helix at a stretched pitch. Hover squeezes
+   the coils down and lets them back up once; entering compact drives every coil toward the base — the pitch
    closes to ~58% and the wire thins, so each ring stays distinct — with a
    burst of sparks from the base. The compressed pose holds while compact is
-   on. The outer <g> carries the sway (X) and the ellipse the compression (Y),
-   so a press mid-sway never snaps. */
+   on. The per-coil wrapper <g> is kept for future X motion; all Y motion
+   is on the ellipse. */
 .press-btn .sl { overflow: visible; }
 .press-btn .sl-c {
     transition: transform 0.42s cubic-bezier(0.3, 1.6, 0.5, 1), stroke-width 0.3s;
@@ -3410,8 +3410,13 @@ body.compact-mode .title span { white-space: nowrap; }
     stroke-width: 1.05;
     transition: transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1) calc((5 - var(--i)) * 16ms), stroke-width 0.3s;
 }
-.press-btn:hover .sl-cw { animation: slSway 1.1s ease-in-out infinite; animation-delay: calc(var(--i) * -0.09s); }
-@keyframes slSway { 0%, 100% { transform: translateX(0); } 30% { transform: translateX(1.1px); } 70% { transform: translateX(-1.1px); } }
+.press-btn:hover:not(.pressed) .sl-c { animation: slSqueeze 1s ease-in-out 1; animation-delay: calc((5 - var(--i)) * 14ms); }
+/* Hover: one smooth squeeze to the compact pose and back, top coil leading.
+   Not while compact is on — the pressed pose owns the transform then. */
+@keyframes slSqueeze {
+    0%, 100% { transform: translateY(0); stroke-width: 1.7; }
+    42%, 52% { transform: translateY(calc(var(--i) * 1.4px)); stroke-width: 1.05; }
+}
 .press-btn .sl-s { opacity: 0; transform-origin: 12px 19.5px; transform: rotate(var(--r)); }
 .press-btn.sparking .sl-s { animation: slSpark 0.5s cubic-bezier(0.1, 0.6, 0.4, 1) var(--t) both; }
 @keyframes slSpark {
