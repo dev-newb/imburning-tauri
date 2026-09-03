@@ -798,28 +798,54 @@ fn open_graph_window(app: tauri::AppHandle, state: State<'_, std::sync::Arc<AppS
     if saved.get("x").is_some() && saved.get("y").is_some() {
         builder = builder.position(num("x", 0.0), num("y", 0.0));
     }
-    let _ = builder.build();
+    match builder.build() {
+        Ok(window) => {
+            // Electron's `closed` fired however the window went away — red
+            // button, Cmd+W, or our close command — and the renderer relies on
+            // that signal to re-dock the inline graph. Here the only place to
+            // see a native close is the window's own event stream, so hook it:
+            // without this a red-button close left the renderer believing the
+            // graph was still detached, and the graph toggle looked dead.
+            let bounds_state = state.inner().clone();
+            let bounds_window = window.clone();
+            let handle = app.clone();
+            window.on_window_event(move |event| match event {
+                tauri::WindowEvent::CloseRequested { .. } => {
+                    save_graph_window_bounds(&bounds_window, &bounds_state);
+                }
+                tauri::WindowEvent::Destroyed => {
+                    let _ = handle.emit("graph-window-closed", ());
+                }
+                _ => {}
+            });
+        }
+        Err(e) => eprintln!("[graph] window build failed: {e}"),
+    }
 }
 
+/// Remember where the user left the graph window before it goes.
+fn save_graph_window_bounds(window: &tauri::WebviewWindow, state: &AppState) {
+    if let (Ok(pos), Ok(size), Ok(scale)) =
+        (window.outer_position(), window.inner_size(), window.scale_factor())
+    {
+        state.store.set(
+            "graphWindowBounds",
+            json!({
+                "x": pos.x as f64 / scale,
+                "y": pos.y as f64 / scale,
+                "width": size.width as f64 / scale,
+                "height": size.height as f64 / scale
+            }),
+        );
+    }
+}
+
+/// `close()` runs the same CloseRequested → Destroyed path as the red button,
+/// so the window's own handlers save the bounds and emit graph-window-closed.
 #[tauri::command]
-fn close_graph_window(app: tauri::AppHandle, state: State<'_, std::sync::Arc<AppState>>) {
+fn close_graph_window(app: tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("graph") {
-        // Remember where the user left it before it goes.
-        if let (Ok(pos), Ok(size), Ok(scale)) =
-            (window.outer_position(), window.inner_size(), window.scale_factor())
-        {
-            state.store.set(
-                "graphWindowBounds",
-                json!({
-                    "x": pos.x as f64 / scale,
-                    "y": pos.y as f64 / scale,
-                    "width": size.width as f64 / scale,
-                    "height": size.height as f64 / scale
-                }),
-            );
-        }
         let _ = window.close();
-        let _ = app.emit("graph-window-closed", ());
     }
 }
 
