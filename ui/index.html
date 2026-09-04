@@ -414,7 +414,9 @@
                     </div>
 
                     <div class="settings-rows">
-                        <!-- Global settings -->
+                        <!-- Global settings: the left pane. The per-company columns
+                             sit beside it, which is what makes Settings a wide panel. -->
+                        <div class="settings-general">
                         <div class="settings-row-2col">
                             <div class="settings-col" id="autoStartCol">
                                 <span class="settings-row-label">Launch at startup</span>
@@ -477,8 +479,6 @@
                                 </div>
                             </div>
                             <div class="sound-filename" id="soundBurnName">Default (fire)</div>
-                        </div>
-                        <div class="settings-section-sub">
                             <div class="settings-row-2col">
                                 <div class="settings-col">
                                     <span class="settings-row-label" title="Plays when a banked weekly-limit reset lands in your OpenAI account">Banked-reset sound</span>
@@ -492,8 +492,6 @@
                                 </div>
                             </div>
                             <div class="sound-filename" id="soundBankedName">Default (banked reset)</div>
-                        </div>
-                        <div class="settings-section-sub">
                             <div class="settings-row-2col">
                                 <div class="settings-col">
                                     <span class="settings-row-label" title="Plays when any usage pool hits 100% — you just hit the wall">Wall-hit sound</span>
@@ -507,10 +505,6 @@
                                 </div>
                             </div>
                             <div class="sound-filename" id="soundWallName">Default (rock punch)</div>
-                        </div>
-                        <div class="settings-row-2col">
-                            <div class="settings-col"></div>
-                            <div class="settings-col"></div>
                         </div>
                         <!-- Theme moved to the toolbar: the leftmost cycle button. -->
                         <div class="settings-row-2col">
@@ -574,7 +568,7 @@
                                     <input type="color" id="trayOutlineColor" title="Outline color">
                                 </span>
                             </div>
-                            <div class="settings-col">
+                            <div class="settings-col hint-below">
                                 <span class="settings-row-label">Font colour</span>
                                 <span class="tray-color-pair">
                                     <label class="toggle-switch"><input type="checkbox" id="fontColorToggle"><span class="toggle-slider"></span></label>
@@ -590,7 +584,7 @@
                             </div>
                             <div class="settings-col">
                                 <span class="settings-row-label">Webhook / ntfy URL</span>
-                                <input type="text" id="webhookUrl" class="settings-select webhook-url" placeholder="https://ntfy.sh/your-topic" spellcheck="false">
+                                <input type="text" id="webhookUrl" class="settings-select webhook-url" placeholder="https://ntfy.sh/topic" spellcheck="false">
                             </div>
                         </div>
                         <div class="settings-row-2col">
@@ -625,11 +619,12 @@
                                 <span class="settings-row-hint">The email each provider is signed in as, shown under its header in the wide and tall layouts. Also toggled by the hide pill on the label itself.</span>
                             </div>
                         </div>
+                        </div>
 
                         <!-- Per-company settings: one column per provider, login controls lowest -->
                         <div class="settings-providers">
                             <div class="provider-col">
-                                <div class="provider-col-title pct-anthropic">Anthropic</div>
+                                <div class="provider-col-title brand-anthropic">Anthropic</div>
                                 <div class="provider-col-body">
                                     <span class="settings-row-label">Session tray</span>
                                     <span class="tray-color-pair"><input type="color" id="traySessionBg" title="Background"><input type="color" id="traySessionText" title="Number"></span>
@@ -641,19 +636,16 @@
                                     <label class="toggle-switch"><input type="checkbox" id="showClaudeCodeToggle"><span class="toggle-slider"></span></label>
                                     <span class="settings-row-label" title="Ingest your local claude CLI login's usage. Off: the widget only tracks accounts you signed into, and a detected CLI login shows as an offer chip instead">Pull from CLI</span>
                                     <label class="toggle-switch"><input type="checkbox" id="cliAdoptAnthropicToggle"><span class="toggle-slider"></span></label>
-                                    
                                 </div>
                                 <div class="provider-col-login">
                                     <span class="settings-row-hint" id="anthropicLoginStatus">Not connected</span>
                                     <span class="settings-row-hint plain-storage-warning" id="plainStorageWarning" style="display:none;">⚠ No OS keychain available — stored logins sit unencrypted on this machine</span>
                                     <button class="settings-connect-btn" id="logoutBtn" title="Sign in to Claude.ai">Log In</button>
-                                </div>
-                                <button class="settings-connect-btn provider-hide-btn" id="providerHideAnthropic" title="Remove every mention of this provider from the widget until restored here">🧨 Hide provider</button>
-                                <div class="provider-col-footer">
+                                    <button class="settings-connect-btn provider-hide-btn" id="providerHideAnthropic" title="Remove every mention of this provider from the widget until restored here">🧨 Hide provider</button>
                                 </div>
                             </div>
                             <div class="provider-col">
-                                <div class="provider-col-title pct-openai">OpenAI</div>
+                                <div class="provider-col-title brand-openai">OpenAI</div>
                                 <div class="provider-col-body">
                                     <span class="settings-row-label">Codex tray</span>
                                     <span class="tray-color-pair"><input type="color" id="trayOpenaiBg" title="Background"><input type="color" id="trayOpenaiText" title="Number"></span>
@@ -663,19 +655,16 @@
                                     <label class="toggle-switch"><input type="checkbox" id="showCodexCliToggle"><span class="toggle-slider"></span></label>
                                     <span class="settings-row-label" title="Ingest your local codex CLI login's usage. Off: the widget only tracks accounts you signed into, and a detected CLI login shows as an offer chip instead">Pull from CLI</span>
                                     <label class="toggle-switch"><input type="checkbox" id="cliAdoptOpenaiToggle"><span class="toggle-slider"></span></label>
-                                    
                                 </div>
                                 <div class="provider-col-login">
                                     <span class="settings-row-hint" id="openaiLoginStatus">Not connected</span>
                                     <button class="settings-connect-btn" id="settingsConnectOpenaiBtn">Connect</button>
                                     <button class="disconnect-btn" id="disconnectOpenaiBtn" style="display: none;">Disconnect</button>
-                                </div>
-                                <button class="settings-connect-btn provider-hide-btn" id="providerHideOpenai" title="Remove every mention of this provider from the widget until restored here">🧨 Hide provider</button>
-                                <div class="provider-col-footer">
+                                    <button class="settings-connect-btn provider-hide-btn" id="providerHideOpenai" title="Remove every mention of this provider from the widget until restored here">🧨 Hide provider</button>
                                 </div>
                             </div>
                             <div class="provider-col">
-                                <div class="provider-col-title pct-google">Google</div>
+                                <div class="provider-col-title brand-google"><span class="g-b">G</span><span class="g-r">o</span><span class="g-y">o</span><span class="g-b">g</span><span class="g-g">l</span><span class="g-r">e</span></div>
                                 <div class="provider-col-body">
                                     <span class="settings-row-label">Gemini tray</span>
                                     <span class="tray-color-pair"><input type="color" id="trayGoogleBg" title="Background"><input type="color" id="trayGoogleText" title="Number"></span>
@@ -685,22 +674,18 @@
                                     <label class="toggle-switch"><input type="checkbox" id="showGeminiCliToggle"><span class="toggle-slider"></span></label>
                                     <span class="settings-row-label" title="Ingest your local gemini/Antigravity CLI login's usage. Off: the widget only tracks accounts you signed into, and a detected CLI login shows as an offer chip instead">Pull from CLI</span>
                                     <label class="toggle-switch"><input type="checkbox" id="cliAdoptGoogleToggle"><span class="toggle-slider"></span></label>
-                                    
-                                    
+                                    <span class="settings-row-label" title="Which Google surface to meter. Auto uses Antigravity when it is installed (the only surface that reports agent usage) and otherwise the classic Gemini Code Assist quota.">Usage source</span>
+                                    <select id="googleSource" class="settings-select" title="Auto: Antigravity when it is installed, otherwise the Gemini Code Assist quota">
+                                        <option value="auto">Auto</option>
+                                        <option value="antigravity">Antigravity</option>
+                                        <option value="gemini">Gemini</option>
+                                    </select>
                                 </div>
                                 <div class="provider-col-login">
                                     <span class="settings-row-hint" id="googleLoginStatus">Not connected</span>
                                     <button class="settings-connect-btn" id="settingsConnectGoogleBtn">Connect</button>
                                     <button class="disconnect-btn" id="disconnectGoogleBtn" style="display: none;">Disconnect</button>
-                                </div>
-                                <button class="settings-connect-btn provider-hide-btn" id="providerHideGoogle" title="Remove every mention of this provider from the widget until restored here">🧨 Hide provider</button>
-                                <div class="provider-col-footer">
-                                    <span class="settings-row-label" title="Which Google surface to meter. Antigravity is the only one that reports agent usage; Gemini reads the classic Code Assist quota.">Usage source</span>
-                                    <select id="googleSource" class="settings-select">
-                                        <option value="auto">Auto (Antigravity if present)</option>
-                                        <option value="antigravity">Antigravity only</option>
-                                        <option value="gemini">Gemini only</option>
-                                    </select>
+                                    <button class="settings-connect-btn provider-hide-btn" id="providerHideGoogle" title="Remove every mention of this provider from the widget until restored here">🧨 Hide provider</button>
                                 </div>
                             </div>
                         </div>
@@ -708,18 +693,22 @@
                     </div>
 
                     <div class="settings-footer">
-                        <span class="settings-version-label" id="settingsVersionLabel">v1.5.0</span>
-                        <span class="settings-update-link" id="settingsUpdateLink" style="display: none;"></span>
-                        <button class="github-btn" id="githubBtn">
-                            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+                        <!-- One row, on the same two columns as the panes above: version and
+                             credit under the global settings, GitHub + coffee under the accounts. -->
+                        <div class="settings-footer-left">
+                            <span class="settings-version-label" id="settingsVersionLabel">v1.5.0</span>
+                            <span class="settings-update-link" id="settingsUpdateLink" style="display: none;"></span>
+                            <span class="settings-credit">Original "Claude Usage Widget" by <button class="credit-link" id="creditLink">Slavomir Durej</button></span>
+                        </div>
+                        <div class="settings-footer-right">
+                            <button class="github-btn" id="githubBtn">
+                                <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
-                            </svg>
-                            I'm Burning! on GitHub
-                        </button>
-                    </div>
-                    <div class="settings-credit">
-                        <span>Original "Claude Usage Widget" by <button class="credit-link" id="creditLink">Slavomir Durej</button></span>
-                        <button class="coffee-btn" id="coffeeBtn" title="Support I'm Burning! development">☕ Buy me a coffee</button>
+                                </svg>
+                                I'm Burning! on GitHub
+                            </button>
+                            <button class="coffee-btn" id="coffeeBtn" title="Support I'm Burning! development">☕ Buy me a coffee</button>
+                        </div>
                     </div>
                 </div>
             </div>

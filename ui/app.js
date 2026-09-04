@@ -6,8 +6,6 @@ let latestUsageData = null;
 let isExpanded = false;
 let isCompactMode = false;
 let _settingsOpenedFromCompact = false;
-let _settingsReturnToWide = false;
-let _settingsReturnBounds = null;
 let usageChart = null;
 let graphVisible = false;
 let graphWasVisible = false; // preserves graph state across compact mode toggle
@@ -661,25 +659,6 @@ function setupEventListeners() {
         } else {
             window.electronAPI.settingsRestore();
         }
-        if (_settingsReturnToWide) {
-            _settingsReturnToWide = false;
-            if (elements.wideBtn && _activePreset !== 'wide') {
-                setTimeout(() => elements.wideBtn.click(), 200);
-            }
-        } else if (_settingsReturnBounds) {
-            const bounds = _settingsReturnBounds;
-            _settingsReturnBounds = null;
-            // Release the tall preset we borrowed, then put the exact
-            // hand-sized geometry back.
-            if (_activePreset === 'tall') {
-                _activePreset = null;
-                if (elements.tallBtn) elements.tallBtn.classList.remove('active');
-                window.electronAPI.applyWindowPreset('reset');
-            }
-            setTimeout(() => {
-                if (window.electronAPI.setWindowBounds) window.electronAPI.setWindowBounds(bounds);
-            }, 250);
-        }
         startAutoUpdate();
         // Account toggles filter post-fetch, so a refetch applies them now
         await fetchUsageData();
@@ -951,19 +930,10 @@ function setupEventListeners() {
             _settingsOpenedFromCompact = true;
             window.electronAPI.setCompactMode(false);
         }
-        // Settings is designed for the tall/portrait layout. Opening it from
-        // the rectangular window kept the wide geometry and squeezed the
-        // panel; switch to tall first, and go back to wide on close when
-        // wide was the active preset.
-        if (document.body.classList.contains('landscape')) {
-            _settingsReturnToWide = _activePreset === 'wide';
-            // A hand-stretched landscape window (no preset) gets its exact
-            // geometry back after Settings closes.
-            _settingsReturnBounds = (!_activePreset && window.electronAPI.getWindowBounds)
-                ? await window.electronAPI.getWindowBounds() : null;
-            if (elements.tallBtn && _activePreset !== 'tall') elements.tallBtn.click();
-            await new Promise((resolve) => setTimeout(resolve, 350));
-        }
+        // Settings is a wide panel with its own geometry: fitSettingsWindow
+        // sizes the window to it (width included) and settingsRestore puts
+        // the exact previous bounds back on Done, whatever preset or
+        // hand-size the user had.
         await loadSettings();
         elements.settingsOverlay.style.display = 'flex';
         // Grow the window to show EVERY setting (and lock resizing) once the
@@ -1759,15 +1729,46 @@ function applyLabelMode(effWidth) {
     else if (document.body.classList.contains('lbl-code')) mode = 'code';
     else if (document.body.classList.contains('lbl-abbr')) mode = 'abbr';
     else mode = 'full';
+    let unmeasured = false;
     document.querySelectorAll('.usage-label').forEach((el) => {
         const tip = el.dataset.tip || '';
         const full = (el.dataset.abbr || el.textContent || '').replace(/\(1D\)/, '(daily)');
-        if (mode === 'code') el.title = tip ? `${full} — ${tip}` : full;
-        else if (mode === 'abbr') el.title = tip;
-        // Full mode: no tooltip unless the name is ellipsis-truncated, in
-        // which case the hover carries the complete label.
-        else el.title = (el.scrollWidth > el.clientWidth + 1) ? full : '';
+        if (mode === 'code') { el.title = tip ? `${full} — ${tip}` : full; return; }
+        if (mode === 'abbr') { el.title = tip; return; }
+        // Full mode. A name that does not fit its column used to end in an
+        // ellipsis with no way to read the rest. Now the parenthetical
+        // (window or scope) moves into the tooltip and the bare name stays
+        // readable; only a name that is still too long keeps the ellipsis,
+        // and then the hover carries the complete label.
+        const node = _labelTextNode(el);
+        if (node) {
+            if (el.dataset.fullText == null) el.dataset.fullText = node.nodeValue;
+            const fullText = el.dataset.fullText;
+            node.nodeValue = fullText;
+            if (el.clientWidth === 0) { unmeasured = true; el.title = ''; return; }
+            const paren = fullText.match(/^(.*\S)\s*\(([^)]*)\)\s*$/);
+            if (paren && el.scrollWidth > el.clientWidth + 1) {
+                node.nodeValue = paren[1];
+                el.title = tip ? `${fullText} — ${tip}` : fullText;
+                return;
+            }
+        }
+        el.title = (el.scrollWidth > el.clientWidth + 1) ? full : '';
     });
+    // Labels measured before layout read as zero-width; take one more pass
+    // once the frame has painted so the swap sees real widths.
+    if (mode === 'full' && unmeasured && !_labelModeRetry) {
+        _labelModeRetry = true;
+        requestAnimationFrame(() => { _labelModeRetry = false; applyLabelMode(); });
+    }
+}
+
+let _labelModeRetry = false;
+
+// The label's own text node (status tags like ON/OFF are child elements).
+function _labelTextNode(el) {
+    for (const n of el.childNodes) if (n.nodeType === Node.TEXT_NODE) return n;
+    return null;
 }
 
 function rowCode(key, label) {
@@ -4883,10 +4884,22 @@ function fitSettingsWindow() {
     const content = elements.settingsOverlay
         && elements.settingsOverlay.querySelector('.settings-content');
     if (!content) return;
+    // The width is the sum the stylesheet declares (two panes, the gap
+    // between them, the side padding), not a measurement: WebKit's
+    // max-content for the flex row ignores the panes' fixed basis and
+    // reports the unwrapped text width, which sized the Tauri build's
+    // window to the whole screen. The height IS measured, at that width,
+    // so the wrapped hints count.
+    const cs = getComputedStyle(elements.settingsOverlay);
+    const px = (name) => parseFloat(cs.getPropertyValue(name)) || 0;
+    const neededWidth = Math.ceil(px('--settings-general-w') + px('--settings-providers-w')
+        + px('--settings-gap') + 2 * px('--settings-pad')) + 2;
     content.classList.add('measuring');
+    content.style.width = neededWidth + 'px';
     const needed = Math.ceil(content.getBoundingClientRect().height) + 2;
+    content.style.width = '';
     content.classList.remove('measuring');
-    if (needed >= 120) window.electronAPI.settingsFit(needed);
+    if (needed >= 120) window.electronAPI.settingsFit(needed, neededWidth);
 }
 
 // Settings management

@@ -568,6 +568,79 @@ fn set_min_height(window: tauri::Window, height: f64) {
     let _ = window.set_min_size(Some(tauri::LogicalSize::new(290.0, height)));
 }
 
+/// Geometry to put back when Settings closes: x, y, w, h (logical) plus the
+/// auto-fit's last set height, so a hand-sized window stays hand-sized.
+static PRE_SETTINGS_BOUNDS: std::sync::Mutex<Option<(f64, f64, f64, f64, f64)>> =
+    std::sync::Mutex::new(None);
+
+/// Settings is a wide panel with its own geometry. Size the window to it
+/// (width included), lock resizing, and remember what the user had so
+/// settings_restore can put it back exactly. Electron: 'settings-fit'.
+#[tauri::command]
+fn settings_fit(window: tauri::Window, height: f64, width: Option<f64>) {
+    let scale = window.scale_factor().unwrap_or(1.0);
+    if let Ok(mut slot) = PRE_SETTINGS_BOUNDS.lock() {
+        if slot.is_none() {
+            if let (Ok(pos), Ok(size)) = (window.outer_position(), window.inner_size()) {
+                let last = LAST_SET_HEIGHT.lock().map(|h| *h).unwrap_or(0.0);
+                *slot = Some((
+                    pos.x as f64 / scale,
+                    pos.y as f64 / scale,
+                    size.width as f64 / scale,
+                    size.height as f64 / scale,
+                    last,
+                ));
+            }
+        }
+    }
+    let _ = window.set_resizable(false);
+    let cur_w = window.inner_size().map(|s| s.width as f64 / scale).unwrap_or(590.0);
+    let mut w = width.filter(|w| *w > 0.0).map(|w| w.round().max(290.0)).unwrap_or(cur_w);
+    let mut h = height.round().max(200.0);
+    let mut area: Option<(f64, f64, f64, f64)> = None;
+    if let Ok(Some(monitor)) = window.current_monitor() {
+        let ms = monitor.scale_factor();
+        let (mp, msz) = (monitor.position(), monitor.size());
+        let a = (mp.x as f64 / ms, mp.y as f64 / ms, msz.width as f64 / ms, msz.height as f64 / ms);
+        w = w.min(a.2);
+        h = h.min(a.3);
+        area = Some(a);
+    }
+    dev_log(&format!("  settings_fit -> {:.0}x{:.0}", w, h));
+    let _ = window.set_size(tauri::LogicalSize::new(w, h));
+    if let Ok(mut slot) = LAST_SET_HEIGHT.lock() {
+        *slot = h;
+    }
+    // Keep the grown window on its display.
+    if let (Some((ax, ay, aw, ah)), Ok(pos)) = (area, window.outer_position()) {
+        let (px, py) = (pos.x as f64 / scale, pos.y as f64 / scale);
+        let x = px.min(ax + aw - w).max(ax);
+        let y = py.min(ay + ah - h).max(ay);
+        if (x - px).abs() > 0.5 || (y - py).abs() > 0.5 {
+            let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+        }
+    }
+}
+
+/// Undo settings_fit. re_compact: the caller re-enters compact itself, so
+/// the pre-settings bounds are not wanted back. Electron: 'settings-restore'.
+#[tauri::command]
+fn settings_restore(window: tauri::Window, re_compact: Option<bool>) {
+    let _ = window.set_resizable(true);
+    let prev = PRE_SETTINGS_BOUNDS.lock().ok().and_then(|mut s| s.take());
+    if re_compact.unwrap_or(false) {
+        return;
+    }
+    if let Some((x, y, w, h, last)) = prev {
+        dev_log(&format!("  settings_restore -> {:.0}x{:.0} @{:.0},{:.0}", w, h, x, y));
+        let _ = window.set_size(tauri::LogicalSize::new(w, h));
+        let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+        if let Ok(mut slot) = LAST_SET_HEIGHT.lock() {
+            *slot = last;
+        }
+    }
+}
+
 /// Wide / tall window presets.
 ///
 /// A named preset OWNS the window geometry until the user turns it off. That
@@ -1353,6 +1426,8 @@ fn main() {
             read_sound_file,
             apply_window_preset,
             send_alert_webhook,
+            settings_fit,
+            settings_restore,
             open_graph_window,
             close_graph_window,
             is_graph_window_open,

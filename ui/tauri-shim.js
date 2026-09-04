@@ -136,8 +136,8 @@
 
     // ---- layout ----
     setCompactMode: (compact) => invoke('set_compact_mode', { compact: compact === true }),
-    settingsFit: (height) => invoke('resize_window', { height: Number(height) || 0 }),
-    settingsRestore: noop,
+    settingsFit: (height, width) => invoke('settings_fit', { height: Number(height) || 0, width: Number(width) || 0 }),
+    settingsRestore: (options) => invoke('settings_restore', { reCompact: !!(options && options.reCompact) }),
     applyWindowPreset: (preset) => invoke('apply_window_preset', { preset: String(preset || '') }),
 
     // ---- detachable graph window ----

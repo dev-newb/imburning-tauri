@@ -646,6 +646,13 @@ body.theme-light .graph-btn.active {
 /* Settings Overlay — single definition (was two conflicting blocks whose
    winner depended on source order; these are the values that actually won) */
 .settings-overlay {
+    /* The two panes' widths, the gap between them and the side padding.
+       The footer mirrors them so its edges line up, and fitSettingsWindow
+       sums them for the window width. */
+    --settings-general-w: 560px;
+    --settings-providers-w: 580px;
+    --settings-gap: 14px;
+    --settings-pad: 14px;
     position: absolute;
     top: 0;
     left: 0;
@@ -707,17 +714,36 @@ body.theme-light .graph-btn.active {
 .settings-rows {
     flex: 1;
     display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: center;
+    padding: 10px var(--settings-pad) 8px;
+    gap: var(--settings-gap);
+}
+
+/* A row whose only column is hidden (the org selector) must not keep its
+   flex gap, or the sound block gets a phantom spacer under it. */
+.settings-row-2col:not(:has(> .settings-col:not([style*="display: none"]))) { display: none; }
+
+/* Left pane: the global settings in their two-column rows. Fixed basis so
+   the panel measures to a known width (fitSettingsWindow sizes the window
+   to it) instead of stretching with whatever window it opened over. */
+.settings-general {
+    flex: 0 0 var(--settings-general-w);
+    min-width: 0;
+    display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: 6px 14px;
     gap: 10px;
 }
 
 
-/* Two-column toggle row */
+/* Two-column toggle row. minmax(0, 1fr): a plain 1fr track grows to its
+   content's min width, so one wide control (the Warn at inputs) widened
+   its column and pushed the whole right column out of line. */
 .settings-row-2col {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 8px;
 }
 
@@ -1288,9 +1314,15 @@ body.custom-font .credits-approx {
 }
 
 .settings-col .settings-row-label {
-    width: 90px;
+    width: 128px;
     flex-shrink: 0;
+    white-space: nowrap;
 }
+
+/* A hint that will not fit beside its controls drops under them, aligned
+   with the controls rather than squeezed into three words per line. */
+.settings-col.hint-below { flex-wrap: wrap; row-gap: 2px; }
+.settings-col.hint-below .settings-row-hint { flex-basis: 100%; padding-left: 138px; }
 
 .settings-col-disabled .settings-row-label {
     color: #787888;
@@ -1311,14 +1343,14 @@ body.custom-font .credits-approx {
 /* Threshold inputs */
 .threshold-group {
     display: flex;
-    gap: 12px;
+    gap: 6px;
     align-items: center;
 }
 
 .threshold-label {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 3px;
     cursor: default;
 }
 
@@ -1338,11 +1370,14 @@ body.custom-font .credits-approx {
 }
 
 .threshold-input {
-    width: 38px;
+    /* 44px: two digits plus the native spinner. Narrower and the spinner
+       covers the number. */
+    width: 44px;
+    box-sizing: border-box;
     background: rgba(255,255,255,0.08);
     border: 1px solid rgba(255,255,255,0.15);
     color: #e0e0e0;
-    padding: 2px 4px;
+    padding: 2px 2px 2px 3px;
     border-radius: 4px;
     font-size: 11px;
     text-align: center;
@@ -1372,6 +1407,7 @@ body.theme-light .threshold-input:focus {
 .threshold-pct {
     color: #707080;
     font-size: 11px;
+    margin-left: -1px;
 }
 
 /* Toggle Switch */
@@ -1434,24 +1470,44 @@ body.theme-light .threshold-input:focus {
 
 
 /* Settings Footer */
+/* One row on the same two columns as the panes above, so the GitHub
+   button's left edge lines up with the account columns. */
 .settings-footer {
-    display: flex;
+    display: grid;
+    grid-template-columns: var(--settings-general-w) var(--settings-providers-w);
+    justify-content: center;
     align-items: center;
-    gap: 8px;
+    gap: var(--settings-gap);
     margin-top: auto;
-    padding: 10px 14px 12px;
+    padding: 10px var(--settings-pad) 12px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+.settings-footer-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+}
+
 .settings-footer .settings-version-label {
-    flex: 1;
+    flex: 0 0 auto;
     font-size: 11px;
     color: #9090b0;
 }
 
-.settings-footer .github-btn {
-    flex-shrink: 0;
+.settings-footer-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
+
+.settings-footer .github-btn {
+    flex: 1;
+    justify-content: center;
+}
+
+.settings-footer .coffee-btn { flex-shrink: 0; }
 
 .logout-btn {
     background: transparent;
@@ -2102,13 +2158,11 @@ body.theme-light .subheading { color: #8a8aa0; }
 /* ---- Settings credit row (original author + coffee) ---- */
 
 .settings-credit {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 0 14px 10px;
     font-size: 10px;
     color: #707090;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .credit-link {
@@ -2150,28 +2204,30 @@ body.theme-light .coffee-btn { background: rgba(200, 160, 0, 0.1); color: #8a6d0
 /* ---- Settings: per-company columns (logins pinned to the bottom) ---- */
 
 .settings-providers {
+    flex: 0 0 var(--settings-providers-w);
+    align-self: stretch;
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 8px;
-    margin-top: 10px;
 }
 
 .provider-col {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 8px;
-    padding: 8px 9px;
+    padding: 10px 11px;
     min-height: 190px;
 }
 
+/* The company name in its own wordmark (the .brand-* rules the main window
+   uses), sized as a heading over the column. */
 .provider-col-title {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.4px;
-    padding-bottom: 4px;
+    font-size: 18px;
+    line-height: 1.2;
+    padding-bottom: 6px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -2182,12 +2238,28 @@ body.theme-light .coffee-btn { background: rgba(200, 160, 0, 0.1); color: #8a6d0
 .provider-col-body {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
 }
 
+/* Sub-headings a step up from the global labels, and the controls under
+   them given room. */
 .provider-col-body .settings-row-label {
-    margin-top: 4px;
+    font-size: 12px;
+    color: #cfcfe0;
+    margin-top: 8px;
 }
+.provider-col-body .toggle-switch { margin: 2px 0 2px; }
+.provider-col-body .tray-color-pair { gap: 6px; margin-top: 2px; }
+.provider-col-body .tray-color-pair input[type="color"] {
+    width: 42px;
+    height: 26px;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    padding: 0;
+}
+.provider-col-body .tray-color-pair input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+.provider-col-body .tray-color-pair input[type="color"]::-webkit-color-swatch { border: none; border-radius: 5px; }
 
 .provider-col-login {
     margin-top: auto;
@@ -2199,7 +2271,7 @@ body.theme-light .coffee-btn { background: rgba(200, 160, 0, 0.1); color: #8a6d0
 }
 
 .provider-col-login .settings-row-hint {
-    font-size: 9px;
+    font-size: 10px;
     word-break: break-all;
     line-height: 1.3;
 }
@@ -2208,8 +2280,8 @@ body.theme-light .coffee-btn { background: rgba(200, 160, 0, 0.1); color: #8a6d0
 .provider-col-login .disconnect-btn,
 .provider-col-login .logout-btn {
     width: 100%;
-    padding: 4px 6px;
-    font-size: 10px;
+    padding: 5px 6px;
+    font-size: 11px;
 }
 
 body.theme-light .provider-col {
@@ -2288,7 +2360,7 @@ body.sz4 .usage-section { grid-template-columns: 46px 44px 36px 36px; justify-co
 body.sz4 .resets-at-text { display: none; }
 
 /* Settings adapts too: provider columns stack, panel scrolls when cramped */
-.settings-content { overflow-y: auto; }
+.settings-content { overflow-y: auto; overflow-x: auto; }
 
 @media (max-width: 520px) {
     .settings-providers { grid-template-columns: 1fr; }
@@ -3706,22 +3778,9 @@ body.no-pizazz .account-offer { animation: none; }
    directly above a shared horizontal rule. Only Google keeps content below
    the line (its Usage source); the other footers stay empty at the same
    height so the rule and the buttons align across all three columns. */
-.provider-hide-btn {
-    padding: 3px 10px;
-    width: 100%;
-    margin-top: auto;
-}
+.provider-hide-btn { width: 100%; }
 
-.provider-col-footer {
-    border-top: 1px solid rgba(255, 255, 255, 0.09);
-    margin: 8px -9px 0;
-    padding: 6px 9px 0;
-    min-height: 56px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-}
-.provider-col-footer .settings-select { width: 100%; }
+.provider-col-body .settings-select { width: 100%; margin-top: 2px; }
 .provider-hide-btn.restore {
     border-color: rgba(45, 212, 191, 0.5);
     color: #7fd8c8;
