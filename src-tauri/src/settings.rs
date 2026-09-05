@@ -124,9 +124,29 @@ pub fn cli_adopted(store: &Store) -> Value {
     saved.unwrap_or_else(|| json!({ "anthropic": false, "openai": false, "google": false }))
 }
 
+pub fn refresh_interval_seconds(value: &Value) -> u64 {
+    value.as_u64()
+        .or_else(|| value.as_str().and_then(|s| s.parse().ok()))
+        .unwrap_or(300)
+        .clamp(15, 3600)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn refresh_intervals_accept_ui_strings_and_numeric_seconds() {
+        for seconds in [15, 30, 60, 120, 300] {
+            assert_eq!(refresh_interval_seconds(&json!(seconds)), seconds);
+            assert_eq!(refresh_interval_seconds(&json!(seconds.to_string())), seconds);
+        }
+        assert_eq!(refresh_interval_seconds(&json!(0)), 15);
+        assert_eq!(refresh_interval_seconds(&json!(9000)), 3600);
+        for invalid in [Value::Null, json!("bad"), json!(-1), json!(1.5)] {
+            assert_eq!(refresh_interval_seconds(&invalid), 300);
+        }
+    }
 
     #[test]
     fn stale_and_partial_settings_never_overwrite_adoption() {

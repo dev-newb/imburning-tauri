@@ -172,6 +172,15 @@
 
   function mainWindowBehaviour() {
 
+  // Native scheduled fetches already stored a fresh snapshot. Repaint it
+  // without issuing a second forced provider request from the renderer.
+  listen('usage-updated', async () => {
+    try {
+      const data = await window.electronAPI.getLatestUsage();
+      if (data && typeof window.updateUI === 'function') window.updateUI(data);
+    } catch (err) { console.warn('scheduled refresh failed:', err); }
+  });
+
   // Post-load settle passes. The renderer only re-measures its height when
   // something changes the content, and Electron's main process happened to
   // provide the extra nudges (did-finish-load, focus, the resize notifier).

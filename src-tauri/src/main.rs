@@ -27,6 +27,7 @@ struct AppState {
     store: Store,
     cache: Cache,
     http: reqwest::Client,
+    refresh_changed: tokio::sync::Notify,
 }
 
 #[tauri::command]
@@ -36,7 +37,7 @@ async fn fetch_usage_data(
     force: Option<bool>,
 ) -> Result<Value, String> {
     let force = force.unwrap_or(false);
-    let data = usage::fetch_all(&state.http, &state.store, &state.cache, force, Some(&app)).await;
+    let data = usage::fetch_all(&state.http, &state.store, &state.cache, force, Some(&app), force).await;
     tray::sync(&app, &data, &state.store);
     emit_burn_alerts(&app, &state).await;
     Ok(data)
@@ -113,7 +114,9 @@ fn save_settings(window: tauri::Window, state: State<'_, std::sync::Arc<AppState
     if previous != next {
         state.cache.clear();
     }
+    let cadence_changed = state.store.get("settings.refreshInterval") != settings.get("refreshInterval").cloned();
     state.store.set("settings", settings.clone());
+    if cadence_changed { state.refresh_changed.notify_one(); }
     settings
 }
 
@@ -1102,6 +1105,7 @@ fn main() {
             // is not Send.
             history::seed_from_electron();
             let state = std::sync::Arc::new(AppState {
+                refresh_changed: tokio::sync::Notify::new(),
                 store: Store::load(),
                 cache: Cache::new(),
                 http: reqwest::Client::builder()
@@ -1381,14 +1385,16 @@ fn main() {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 loop {
-                    let minutes = state
-                        .store
-                        .get_or("settings.refreshInterval", json!(5))
-                        .as_u64()
-                        .unwrap_or(5)
-                        .clamp(1, 60);
-                    tokio::time::sleep(std::time::Duration::from_secs(minutes * 60)).await;
-                    let data = usage::fetch_all(&state.http, &state.store, &state.cache, true, Some(&handle)).await;
+                    let seconds = settings::refresh_interval_seconds(
+                        &state.store.get_or("settings.refreshInterval", json!(300))
+                    );
+                    tokio::select! {
+                        _ = state.refresh_changed.notified() => continue,
+                        _ = tokio::time::sleep(std::time::Duration::from_secs(seconds)) => {}
+                    }
+                    // Refresh Claude/history at the chosen cadence; keep the
+                    // separate five-minute caches for external endpoints.
+                    let data = usage::fetch_all(&state.http, &state.store, &state.cache, true, Some(&handle), false).await;
                     tray::sync(&handle, &data, &state.store);
                     emit_burn_alerts(&handle, &state).await;
                     let _ = handle.emit("usage-updated", ());

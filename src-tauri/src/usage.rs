@@ -39,6 +39,20 @@ impl Cache {
             entries.clear();
         }
     }
+
+    async fn provider<T: serde::Serialize + serde::de::DeserializeOwned>(
+        &self, key: &str, force: bool, fetch: impl std::future::Future<Output = Option<T>>,
+    ) -> Option<T> {
+        if !force {
+            if let Some(value) = self.get(key) {
+                if value.is_null() { return None; }
+                return serde_json::from_value(value).ok();
+            }
+        }
+        let data = fetch.await;
+        self.put(key, serde_json::to_value(&data).unwrap_or(Value::Null));
+        data
+    }
 }
 
 /// CLI-account adoption (consent). CLI-borrowed credentials never feed the
@@ -105,6 +119,7 @@ pub async fn fetch_all(
     cache: &Cache,
     force: bool,
     app: Option<&tauri::AppHandle>,
+    force_providers: bool,
 ) -> Value {
     if !force {
         if let Some(cached) = cache.get("usage") {
@@ -120,9 +135,9 @@ pub async fn fetch_all(
     let adopted = cli_adopted(store);
     // Independent network calls — run them concurrently, not in sequence.
     let (anthropic, codex_data, google_data) = tokio::join!(
-        async { if adopted.0 && claude_code::available() { claude_code::fetch(client).await } else { None } },
-        async { if show_codex { codex::fetch(client, adopted.1).await } else { None } },
-        async { if show_google { google(client, store, adopted.2).await } else { None } },
+        async { if adopted.0 && claude_code::available() { cache.provider("claude_cli", force_providers, claude_code::fetch(client)).await } else { None } },
+        async { if show_codex { cache.provider("codex", force_providers, codex::fetch(client, adopted.1)).await } else { None } },
+        async { if show_google { cache.provider("google", force_providers, google(client, store, adopted.2)).await } else { None } },
     );
 
     let mut data = json!({
@@ -219,4 +234,32 @@ pub async fn fetch_all(
     store.set("latestUsageData", data.clone());
     cache.put("usage", data.clone());
     data
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn scheduled_document_refresh_retains_provider_throttles_but_manual_refresh_bypasses_them() {
+        let cache = Cache::new();
+        let calls = std::cell::Cell::new(0);
+        let fetch = || async {
+            calls.set(calls.get() + 1);
+            Some(json!({"percent": calls.get()}))
+        };
+        assert_eq!(cache.provider("codex", false, fetch()).await.unwrap()["percent"], 1);
+        assert_eq!(cache.provider("codex", false, fetch()).await.unwrap()["percent"], 1);
+        assert_eq!(calls.get(), 1);
+        assert_eq!(cache.provider("codex", true, fetch()).await.unwrap()["percent"], 2);
+        cache.clear();
+        assert_eq!(cache.provider("codex", false, fetch()).await.unwrap()["percent"], 3);
+    }
+
+    #[tokio::test]
+    async fn cached_failed_provider_stays_absent() {
+        let cache = Cache::new();
+        assert!(cache.provider::<Value>("claude_cli", false, async { None }).await.is_none());
+        assert!(cache.provider::<Value>("claude_cli", false, async { panic!("failure is throttled") }).await.is_none());
+    }
 }
