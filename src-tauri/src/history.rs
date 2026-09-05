@@ -83,8 +83,7 @@ fn day_stamp(ts_ms: i64) -> String {
         .unwrap_or_else(|| "unknown".into())
 }
 
-/// Worst (highest) percent across a provider's pools — one series per
-/// provider, matching what the Electron build records.
+/// Gemini records its highest pool; Codex records its first pool in Electron.
 fn worst(limits: Option<&Value>) -> Option<f64> {
     let arr = limits?.as_array()?;
     arr.iter()
@@ -92,18 +91,67 @@ fn worst(limits: Option<&Value>) -> Option<f64> {
         .fold(None, |acc: Option<f64>, p| Some(acc.map_or(p, |a| a.max(p))))
 }
 
-/// The write gate, split out so it can be asserted on directly: whether this
-/// document represents a real reading worth plotting.
+fn first(limits: Option<&Value>) -> Option<f64> {
+    limits?.as_array()?.first()?.get("percent")?.as_f64()
+}
+
+fn provider_samples(data: &Value) -> [(&'static str, Option<f64>); 4] {
+    [
+        ("codex", first(data.pointer("/codex/limits"))),
+        ("gemini", worst(data.pointer("/gemini/limits"))),
+        ("codexCli", first(data.pointer("/codex/cli/limits"))),
+        ("geminiCli", worst(data.pointer("/gemini/cli/limits"))),
+    ]
+}
+
+/// Match Electron's gate: absent reset timestamps and absent primary/secondary
+/// provider readings mean this is a dead-session document, not a real zero.
 pub fn would_record(data: &Value) -> bool {
-    let codex = worst(data.get("codex").and_then(|c| c.get("limits")));
-    let gemini = worst(data.get("gemini").and_then(|g| g.get("limits")));
-    let has_reset = |field: &str| {
-        data.get(field)
-            .and_then(|v| v.get("resets_at"))
-            .map(|v| !v.is_null())
-            .unwrap_or(false)
+    let has_reset = |field: &str| match data.get(field).and_then(|v| v.get("resets_at")) {
+        Some(Value::String(s)) => !s.is_empty(),
+        Some(Value::Bool(b)) => *b,
+        Some(Value::Number(n)) => n.as_f64() != Some(0.0),
+        Some(Value::Null) | None => false,
+        _ => true,
     };
-    has_reset("five_hour") || has_reset("seven_day") || codex.is_some() || gemini.is_some()
+    has_reset("five_hour") || has_reset("seven_day")
+        || provider_samples(data).iter().any(|(_, value)| value.is_some())
+}
+
+fn sample(data: &Value, timestamp: i64) -> Option<Value> {
+    if !would_record(data) { return None; }
+    let mut entry = json!({"timestamp": timestamp});
+    for (key, field) in [
+        ("session", "five_hour"), ("weekly", "seven_day"),
+        ("sonnet", "seven_day_sonnet"), ("opus", "seven_day_opus"),
+        ("cowork", "seven_day_cowork"), ("design", "seven_day_omelette"),
+        ("oauthApps", "seven_day_oauth_apps"), ("extraUsage", "extra_usage"),
+    ] {
+        entry[key] = json!(data.get(field).and_then(|v| v.get("utilization")).and_then(Value::as_f64));
+    }
+    let mut scoped = serde_json::Map::new();
+    if let Some(limits) = data.get("limits").and_then(Value::as_array) {
+        let slug_chars = regex::Regex::new("[^a-z0-9]+").expect("literal regex");
+        for limit in limits {
+            if limit.get("kind").and_then(Value::as_str) != Some("weekly_scoped") { continue; }
+            let Some(percent) = limit.get("percent").and_then(Value::as_f64) else { continue };
+            let name = limit.pointer("/scope/model/display_name").and_then(Value::as_str).filter(|s| !s.is_empty())
+                .or_else(|| limit.pointer("/scope/surface").and_then(Value::as_str).filter(|s| !s.is_empty()))
+                .unwrap_or("Scoped");
+            let slug = slug_chars.replace_all(&name.to_lowercase(), "_").into_owned();
+            scoped.insert(slug, json!(percent));
+        }
+    }
+    if !scoped.is_empty() { entry["scoped"] = Value::Object(scoped); }
+    for (key, value) in provider_samples(data) {
+        if let Some(value) = value { entry[key] = json!(value); }
+    }
+    if data.get("claude_code_same_account").and_then(Value::as_bool) == Some(false) {
+        if let Some(value) = data.pointer("/claude_code/seven_day/utilization").and_then(Value::as_f64) {
+            entry["claudeCli"] = json!(value);
+        }
+    }
+    Some(entry)
 }
 
 pub fn record(scope: &str, data: &Value) {
@@ -111,30 +159,8 @@ pub fn record(scope: &str, data: &Value) {
 }
 
 fn record_at(base: &Path, scope: &str, data: &Value) {
-    let session = data.get("five_hour").and_then(|v| v.get("utilization")).and_then(|v| v.as_f64());
-    let weekly = data.get("seven_day").and_then(|v| v.get("utilization")).and_then(|v| v.as_f64());
-    let codex = worst(data.get("codex").and_then(|c| c.get("limits")));
-    let gemini = worst(data.get("gemini").and_then(|g| g.get("limits")));
-
-    if !would_record(data) {
-        return;
-    }
-
     let timestamp = chrono::Utc::now().timestamp_millis();
-    let entry = json!({
-        "timestamp": timestamp,
-        "session": session,
-        "weekly": weekly,
-        "sonnet": Value::Null,
-        "opus": Value::Null,
-        "cowork": Value::Null,
-        "design": Value::Null,
-        "oauthApps": Value::Null,
-        "extraUsage": Value::Null,
-        "scoped": {},
-        "codex": codex,
-        "gemini": gemini,
-    });
+    let Some(entry) = sample(data, timestamp) else { return };
 
     let dir = scope_dir(base, scope);
     if fs::create_dir_all(&dir).is_err() {
@@ -276,5 +302,31 @@ mod scope_tests {
         fs::remove_dir(&broken).unwrap();
         seed_at(&tauri, &electron, "org-a").unwrap();
         assert_eq!(read_at(&tauri, "org-a").len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod parity_tests {
+    use super::*;
+
+    // JSON represents one numeric type; serde_json distinguishes 1 and 1.0.
+    fn numeric_values(value: &Value) -> Value {
+        match value {
+            Value::Number(n) => json!(n.as_f64()),
+            Value::Array(a) => Value::Array(a.iter().map(numeric_values).collect()),
+            Value::Object(o) => Value::Object(o.iter().map(|(k, v)| (k.clone(), numeric_values(v))).collect()),
+            _ => value.clone(),
+        }
+    }
+
+    #[test]
+    fn records_match_electrons_actual_history_recorder() {
+        // Expectations captured by executing storeUsageHistory and its scoped/
+        // Gemini helpers from burnwatch 395197b with a stub append and clock.
+        let cases: Value = serde_json::from_str(include_str!("../tests/fixtures/history-parity.json")).unwrap();
+        for case in cases.as_array().unwrap() {
+            let actual = sample(&case["input"], 1788609600000).unwrap_or(Value::Null);
+            assert_eq!(numeric_values(&actual), numeric_values(&case["expected"]), "{}", case["name"]);
+        }
     }
 }

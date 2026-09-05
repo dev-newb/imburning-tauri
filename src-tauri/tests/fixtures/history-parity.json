@@ -1,0 +1,272 @@
+[
+  {
+    "name": "all fields and independent CLI accounts",
+    "input": {
+      "five_hour": {
+        "utilization": 0,
+        "resets_at": "2026-09-05T12:00:00Z"
+      },
+      "seven_day": {
+        "utilization": 22,
+        "resets_at": "2026-09-10T12:00:00Z"
+      },
+      "seven_day_sonnet": {
+        "utilization": 33
+      },
+      "seven_day_opus": {
+        "utilization": 44
+      },
+      "seven_day_cowork": {
+        "utilization": 55
+      },
+      "seven_day_omelette": {
+        "utilization": 66
+      },
+      "seven_day_oauth_apps": {
+        "utilization": 77
+      },
+      "extra_usage": {
+        "utilization": 11
+      },
+      "limits": [
+        {
+          "kind": "weekly_scoped",
+          "scope": {
+            "model": {
+              "display_name": "Fable"
+            }
+          },
+          "percent": 0
+        },
+        {
+          "kind": "weekly_scoped",
+          "scope": {
+            "model": {
+              "display_name": "Opus 4.8 (Fast)"
+            }
+          },
+          "percent": 12
+        },
+        {
+          "kind": "weekly_scoped",
+          "scope": {
+            "surface": "Cowork tasks"
+          },
+          "percent": 23
+        },
+        {
+          "kind": "weekly_scoped",
+          "percent": 34
+        },
+        {
+          "kind": "weekly_scoped",
+          "percent": null
+        },
+        {
+          "kind": "weekly_scoped",
+          "scope": {
+            "surface": "invalid"
+          },
+          "percent": "99"
+        },
+        {
+          "kind": "weekly",
+          "percent": 100
+        }
+      ],
+      "codex": {
+        "limits": [
+          {
+            "percent": 12
+          },
+          {
+            "percent": 90
+          }
+        ],
+        "cli": {
+          "limits": [
+            {
+              "percent": 23
+            },
+            {
+              "percent": 95
+            }
+          ]
+        }
+      },
+      "gemini": {
+        "limits": [
+          {
+            "percent": 44
+          },
+          {
+            "percent": 55
+          }
+        ],
+        "cli": {
+          "limits": [
+            {
+              "percent": 66
+            },
+            {
+              "percent": 77
+            }
+          ]
+        }
+      },
+      "claude_code": {
+        "seven_day": {
+          "utilization": 88
+        }
+      },
+      "claude_code_same_account": false
+    },
+    "expected": {
+      "timestamp": 1788609600000,
+      "session": 0,
+      "weekly": 22,
+      "sonnet": 33,
+      "opus": 44,
+      "cowork": 55,
+      "design": 66,
+      "oauthApps": 77,
+      "extraUsage": 11,
+      "scoped": {
+        "fable": 0,
+        "opus_4_8_fast_": 12,
+        "cowork_tasks": 23,
+        "scoped": 34
+      },
+      "codex": 12,
+      "gemini": 55,
+      "codexCli": 23,
+      "geminiCli": 77,
+      "claudeCli": 88
+    }
+  },
+  {
+    "name": "primary Codex zero is real; use first pool",
+    "input": {
+      "codex": {
+        "limits": [
+          {
+            "percent": 0
+          },
+          {
+            "percent": 100
+          }
+        ]
+      }
+    },
+    "expected": {
+      "timestamp": 1788609600000,
+      "session": null,
+      "weekly": null,
+      "sonnet": null,
+      "opus": null,
+      "cowork": null,
+      "design": null,
+      "oauthApps": null,
+      "extraUsage": null,
+      "codex": 0
+    }
+  },
+  {
+    "name": "secondary providers can record without Claude",
+    "input": {
+      "codex": {
+        "cli": {
+          "limits": [
+            {
+              "percent": 0
+            },
+            {
+              "percent": 70
+            }
+          ]
+        }
+      },
+      "gemini": {
+        "cli": {
+          "limits": [
+            {
+              "percent": 35
+            },
+            {
+              "percent": 25
+            }
+          ]
+        }
+      }
+    },
+    "expected": {
+      "timestamp": 1788609600000,
+      "session": null,
+      "weekly": null,
+      "sonnet": null,
+      "opus": null,
+      "cowork": null,
+      "design": null,
+      "oauthApps": null,
+      "extraUsage": null,
+      "codexCli": 0,
+      "geminiCli": 35
+    }
+  },
+  {
+    "name": "same-account Claude is not duplicated",
+    "input": {
+      "five_hour": {
+        "utilization": 12,
+        "resets_at": "later"
+      },
+      "claude_code": {
+        "seven_day": {
+          "utilization": 88
+        }
+      },
+      "claude_code_same_account": true
+    },
+    "expected": {
+      "timestamp": 1788609600000,
+      "session": 12,
+      "weekly": null,
+      "sonnet": null,
+      "opus": null,
+      "cowork": null,
+      "design": null,
+      "oauthApps": null,
+      "extraUsage": null
+    }
+  },
+  {
+    "name": "dead session does not record a false zero",
+    "input": {
+      "five_hour": {
+        "utilization": 0,
+        "resets_at": ""
+      },
+      "seven_day": {
+        "utilization": 0,
+        "resets_at": null
+      }
+    },
+    "expected": null
+  },
+  {
+    "name": "invalid first Codex pool does not fall through to the second",
+    "input": {
+      "codex": {
+        "limits": [
+          {
+            "percent": null
+          },
+          {
+            "percent": 90
+          }
+        ]
+      }
+    },
+    "expected": null
+  }
+]

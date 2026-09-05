@@ -189,11 +189,7 @@ pub async fn fetch_all(
     }
 
     if let Some(web) = web_usage {
-        for key in ["five_hour", "seven_day", "limits", "extra_usage"] {
-            if let Some(v) = web.get(key) {
-                data[key] = v.clone();
-            }
-        }
+        copy_anthropic_pools(&mut data, &web);
         data["anthropic_source"] = json!("web");
         data["claude_code_same_account"] = json!(true);
         if let Some(app) = app {
@@ -202,9 +198,7 @@ pub async fn fetch_all(
             }
         }
     } else if let Some(cc) = anthropic {
-        data["five_hour"] = cc.get("five_hour").cloned().unwrap_or(Value::Null);
-        data["seven_day"] = cc.get("seven_day").cloned().unwrap_or(Value::Null);
-        data["limits"] = cc.get("limits").cloned().unwrap_or(json!([]));
+        copy_anthropic_pools(&mut data, &cc);
         data["anthropic_source"] = json!("cli");
         data["claude_code_same_account"] = json!(true);
     }
@@ -235,9 +229,31 @@ pub async fn fetch_all(
     data
 }
 
+// Preserve the pools consumed by the shared renderer and history recorder.
+fn copy_anthropic_pools(data: &mut Value, source: &Value) {
+    for key in ["five_hour", "seven_day", "limits", "extra_usage", "seven_day_sonnet",
+        "seven_day_opus", "seven_day_cowork", "seven_day_omelette", "seven_day_oauth_apps"] {
+        if let Some(value) = source.get(key) { data[key] = value.clone(); }
+    }
+}
+
 #[cfg(test)]
 mod cache_tests {
     use super::*;
+
+    #[test]
+    fn web_and_cli_payloads_retain_every_anthropic_pool() {
+        let cases: Value = serde_json::from_str(include_str!("../tests/fixtures/history-parity.json")).unwrap();
+        let source = &cases[0]["input"];
+        let mut data = json!({"anthropic_source": "unchanged"});
+        copy_anthropic_pools(&mut data, source);
+        for key in ["five_hour", "seven_day", "limits", "extra_usage", "seven_day_sonnet",
+            "seven_day_opus", "seven_day_cowork", "seven_day_omelette", "seven_day_oauth_apps"] {
+            assert_eq!(data.get(key), source.get(key), "dropped {}", key);
+        }
+        assert_eq!(data["anthropic_source"], "unchanged");
+        assert!(data.get("codex").is_none());
+    }
 
     #[tokio::test]
     async fn scheduled_document_refresh_retains_provider_throttles_but_manual_refresh_bypasses_them() {
