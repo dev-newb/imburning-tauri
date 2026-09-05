@@ -11,6 +11,13 @@
 mod store;
 #[path = "../src/providers/mod.rs"]
 mod providers;
+#[path = "../src/oauth.rs"]
+mod oauth;
+
+// Provider/OAuth diagnostics stay local to this test process.
+fn log_error(message: &str) {
+    eprintln!("{message}");
+}
 
 #[test]
 fn matches_js_normalizer() {
