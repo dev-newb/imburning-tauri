@@ -121,8 +121,10 @@ pub async fn fetch_all(
     app: Option<&tauri::AppHandle>,
     force_providers: bool,
 ) -> Value {
+    let scope = crate::history::scope(store);
+    let usage_cache_key = format!("usage:{}", scope);
     if !force {
-        if let Some(cached) = cache.get("usage") {
+        if let Some(cached) = cache.get(&usage_cache_key) {
             return cached;
         }
     }
@@ -152,16 +154,13 @@ pub async fn fetch_all(
     // fallback, exactly as in Electron: it is the richer source, carrying
     // extra-usage and the scoped weekly pools.
     let mut web_usage: Option<Value> = None;
-    if let (Some(app), Some(org)) = (
-        app,
-        store.get("organizationId").and_then(|v| v.as_str().map(String::from)),
-    ) {
+    if let Some(app) = app.filter(|_| scope != "default") {
         // NOT gated on the stored session key. The request rides the webview's
         // cookie jar — the key is only a cached answer to "are we logged in",
         // and gating on it meant one transient failure that cleared the cache
         // permanently disabled a working login.
         {
-            match crate::anthropic::fetch_usage(app, &org).await {
+            match crate::anthropic::fetch_usage(app, &scope).await {
                 Ok(v) => {
                     // A success is also the best moment to refresh the cache.
                     crate::anthropic::remember_session(app);
@@ -220,19 +219,19 @@ pub async fn fetch_all(
 
     // History records the UNFILTERED document: the visibility toggles are a
     // display choice and must never change which series get recorded.
-    crate::history::record(&data);
+    crate::history::record(&scope, &data);
 
     // Analytics run AFTER the sample is recorded, so this refresh's own figure
     // is part of the series they read — the Electron build orders it the same
     // way, and a forecast that ignores the newest point lags by one interval.
-    let history = crate::history::read();
+    let history = crate::history::read(&scope);
     data["forecasts"] = crate::analytics::compute_forecasts(&history, store);
     data["sessionPlans"] = crate::analytics::compute_session_plans(&history, store);
     data["frozenProviders"] = crate::analytics::compute_frozen_providers(&data, &history);
     crate::analytics::check_burn_anomalies(&history, store);
     data["burningSeries"] = crate::analytics::burning_series_map();
     store.set("latestUsageData", data.clone());
-    cache.put("usage", data.clone());
+    cache.put(&usage_cache_key, data.clone());
     data
 }
 

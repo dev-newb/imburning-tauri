@@ -128,6 +128,7 @@ async fn anthropic_login(app: tauri::AppHandle, state: State<'_, std::sync::Arc<
     if result.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
         if let Some(id) = result.get("organizationId").and_then(|v| v.as_str()) {
             state.store.set("organizationId", json!(id));
+            history::seed_from_electron(id);
         }
         if let Some(orgs) = result.get("organizations") {
             state.store.set("organizations", orgs.clone());
@@ -149,6 +150,7 @@ fn delete_credentials(state: State<'_, std::sync::Arc<AppState>>) -> Value {
 #[tauri::command]
 fn set_organization(state: State<'_, std::sync::Arc<AppState>>, org_id: String) -> Value {
     state.store.set("organizationId", json!(org_id));
+    history::seed_from_electron(&org_id);
     state.cache.clear();
     json!({ "success": true })
 }
@@ -220,8 +222,8 @@ mod credential_tests {
 }
 
 #[tauri::command]
-fn get_usage_history() -> Value {
-    Value::Array(history::read())
+fn get_usage_history(state: State<'_, std::sync::Arc<AppState>>) -> Value {
+    Value::Array(history::read(&history::scope(&state.store)))
 }
 
 #[tauri::command]
@@ -1032,7 +1034,8 @@ fn history_to_csv(history: &[Value]) -> String {
 #[tauri::command]
 async fn export_history(app: tauri::AppHandle, format: String) -> Value {
     use tauri_plugin_dialog::DialogExt;
-    let history = history::read();
+    let scope = history::scope(&app.state::<std::sync::Arc<AppState>>().store);
+    let history = history::read(&scope);
     if history.is_empty() {
         return json!({ "ok": false, "error": "No usage history recorded yet." });
     }
@@ -1126,10 +1129,11 @@ fn main() {
             // Held as an Arc, not just managed state: the refresh loop below
             // needs to keep it across an await, and a borrowed State<'_, _>
             // is not Send.
-            history::seed_from_electron();
+            let store = Store::load();
+            history::seed_from_electron(&history::scope(&store));
             let state = std::sync::Arc::new(AppState {
                 refresh_changed: tokio::sync::Notify::new(),
-                store: Store::load(),
+                store,
                 cache: Cache::new(),
                 http: reqwest::Client::builder()
                     .timeout(std::time::Duration::from_secs(16))
