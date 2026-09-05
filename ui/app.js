@@ -719,8 +719,10 @@ function setupEventListeners() {
         const result = await window.electronAPI.oauthConnect(provider);
         if (doneFn) doneFn();
         if (result.ok) {
+            credentials = await window.electronAPI.getCredentials();
             await fetchUsageData({ forceExtended: true });
             if (elements.settingsOverlay.style.display !== 'none') await loadSettings();
+            startAutoUpdate();
         } else if (errFn) {
             errFn(result.error || 'Connection failed');
         }
