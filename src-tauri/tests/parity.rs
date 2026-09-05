@@ -13,6 +13,8 @@ mod store;
 mod providers;
 #[path = "../src/oauth.rs"]
 mod oauth;
+#[path = "../src/text.rs"]
+mod text;
 
 // Provider/OAuth diagnostics stay local to this test process.
 fn log_error(message: &str) {

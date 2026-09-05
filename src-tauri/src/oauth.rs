@@ -308,7 +308,7 @@ pub async fn connect(app: &tauri::AppHandle, client: &reqwest::Client, provider:
             "oauth {}: exchange HTTP {} body {}",
             provider,
             status,
-            &raw[..raw.len().min(400)]
+            crate::text::excerpt(&raw, 400)
         ));
         let detail = body
             .get("error_description")

@@ -15,6 +15,7 @@ mod oauth;
 mod providers;
 mod settings;
 mod store;
+mod text;
 mod tray;
 mod usage;
 

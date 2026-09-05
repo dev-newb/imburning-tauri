@@ -145,11 +145,11 @@ fn classify_fetch_result(status: i64, body: &str) -> Result<Value, String> {
     // Challenge/shape failures never establish that the session is invalid.
     for (pattern, name) in BLOCKED {
         if body.contains(pattern) {
-            return Err(format!("{}: {}", name, &body[..body.len().min(200)]));
+            return Err(format!("{}: {}", name, crate::text::excerpt(body, 200)));
         }
     }
     let parsed = serde_json::from_str(body)
-        .map_err(|_| format!("InvalidJSON: {}", &body[..body.len().min(200)]))?;
+        .map_err(|_| format!("InvalidJSON: {}", crate::text::excerpt(body, 200)))?;
     if status == 401 || status == 403 {
         return Err(format!("AuthFailure: HTTP {}", status));
     }
