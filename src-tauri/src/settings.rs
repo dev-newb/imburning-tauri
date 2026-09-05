@@ -75,9 +75,11 @@ const DEEP_MERGE_KEYS: [&str; 3] = ["trayColors", "trayOutline", "sounds"];
 
 pub fn with_defaults(store: &Store) -> Value {
     let mut out = defaults();
+    out["cliAdopted"] = cli_adopted(store);
     let stored = store.get_or("settings", json!({}));
     let Some(stored) = stored.as_object() else { return out };
     for (key, value) in stored {
+        if key == "cliAdopted" { continue; }
         if DEEP_MERGE_KEYS.contains(&key.as_str()) {
             if let (Some(base), Some(over)) = (
                 out.get_mut(key).and_then(|v| v.as_object_mut()),
@@ -92,4 +94,67 @@ pub fn with_defaults(store: &Store) -> Value {
         out[key] = value.clone();
     }
     out
+}
+
+/// Adoption belongs to its dedicated command, never a stale settings form.
+pub fn merge_saved_settings(stored: Value, updates: &Value) -> Value {
+    let mut merged = stored.as_object().cloned().unwrap_or_default();
+    if let Some(updates) = updates.as_object() {
+        for (key, value) in updates {
+            if key != "cliAdopted" {
+                merged.insert(key.clone(), value.clone());
+            }
+        }
+    }
+    Value::Object(merged)
+}
+
+pub fn cli_adopted(store: &Store) -> Value {
+    let saved = store.get("settings.cliAdopted").filter(Value::is_object);
+    let initialized = store.get("cliAdoptionInitialized").and_then(|v| v.as_bool()) == Some(true);
+    if !initialized {
+        let existing = store.get("latestUsageData").is_some();
+        let adopted = saved.unwrap_or_else(|| json!({
+            "anthropic": existing, "openai": existing, "google": existing
+        }));
+        store.set("settings.cliAdopted", adopted.clone());
+        store.set("cliAdoptionInitialized", json!(true));
+        return adopted;
+    }
+    saved.unwrap_or_else(|| json!({ "anthropic": false, "openai": false, "google": false }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stale_and_partial_settings_never_overwrite_adoption() {
+        let store = Store::in_memory(json!({"settings": {
+            "cliAdopted": {"openai": true}, "theme": "dark", "hiddenRows": {"x": true}
+        }}));
+        let stale = with_defaults(&store);
+        store.set("settings.cliAdopted.openai", json!(false));
+        store.set("settings", merge_saved_settings(store.get_or("settings", json!({})), &stale));
+        assert_eq!(cli_adopted(&store)["openai"], false);
+        store.set("settings", merge_saved_settings(store.get_or("settings", json!({})), &json!({"theme":"light"})));
+        assert_eq!(with_defaults(&store)["cliAdopted"]["openai"], false);
+        assert_eq!(store.get("settings.hiddenRows.x"), Some(json!(true)));
+    }
+
+    #[test]
+    fn grandfathering_runs_once_and_preserves_existing_choices() {
+        let old = Store::in_memory(json!({"latestUsageData": {}}));
+        assert_eq!(cli_adopted(&old)["openai"], true);
+        old.set("settings.cliAdopted", Value::Null);
+        assert_eq!(cli_adopted(&old)["openai"], false);
+        assert_eq!(with_defaults(&old)["cliAdopted"]["openai"], false);
+        let fresh = Store::in_memory(json!({}));
+        assert_eq!(cli_adopted(&fresh)["openai"], false);
+        fresh.set("latestUsageData", json!({}));
+        fresh.set("settings.cliAdopted", Value::Null);
+        assert_eq!(cli_adopted(&fresh)["openai"], false);
+        let declined = Store::in_memory(json!({"latestUsageData":{},"settings":{"cliAdopted":{"openai":false}}}));
+        assert_eq!(cli_adopted(&declined)["openai"], false);
+    }
 }

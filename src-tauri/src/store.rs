@@ -18,6 +18,11 @@ pub struct Store {
 }
 
 impl Store {
+    #[cfg(test)]
+    pub fn in_memory(data: Value) -> Self {
+        Self { path: PathBuf::new(), data: Mutex::new(data) }
+    }
+
     pub fn load() -> Self {
         let path = Self::config_path();
         let data = fs::read_to_string(&path)
@@ -74,6 +79,8 @@ impl Store {
     }
 
     fn flush(&self) {
+        #[cfg(test)]
+        if self.path.as_os_str().is_empty() { return; }
         if let Ok(data) = self.data.lock() {
             if let Ok(text) = serde_json::to_string_pretty(&*data) {
                 // Write through a temp file: a truncated config.json costs the

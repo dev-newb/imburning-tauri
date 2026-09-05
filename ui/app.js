@@ -521,7 +521,7 @@ function setupEventListeners() {
         // Settings: pull-from-CLI adoption toggle
         const adoptToggle = document.getElementById('cliAdopt' + PERMAHIDE_TITLECASE[prov] + 'Toggle');
         if (adoptToggle) adoptToggle.addEventListener('change', async () => {
-            await window.electronAPI.setCliAdopted(prov, adoptToggle.checked);
+            await updateCliAdoption(prov, adoptToggle.checked);
             await fetchUsageData({ forceProviders: true, refreshLocalCredentials: true });
         });
     }
@@ -2005,6 +2005,15 @@ function detonateProvider(prov) {
 // Clicking it pulls that account into the stats (the first empty slot — CLI
 // data lands wherever the pipeline already puts it: primary if nothing else
 // is signed in, second account otherwise).
+async function updateCliAdoption(provider, adopted) {
+    const result = await window.electronAPI.setCliAdopted(provider, adopted);
+    if (!result || result.ok !== true) throw new Error('Could not save CLI adoption');
+    window._cachedSettings = window._cachedSettings || {};
+    window._cachedSettings.cliAdopted = result.state || {
+        ...(window._cachedSettings.cliAdopted || {}), [provider]: adopted === true
+    };
+}
+
 function renderAccountOffers(data) {
     const offers = data.offers || {};
     for (const prov of Object.keys(PERMAHIDE_SECTIONS)) {
@@ -2022,7 +2031,7 @@ function renderAccountOffers(data) {
                 e.stopPropagation();
                 chip.disabled = true;
                 chip.textContent = 'Pulling\u2026';
-                await window.electronAPI.setCliAdopted(prov, true);
+                await updateCliAdoption(prov, true);
                 await fetchUsageData({ forceProviders: true, refreshLocalCredentials: true });
             });
             emailEl.insertAdjacentElement('afterend', chip);

@@ -61,9 +61,7 @@ fn set_cli_adopted(
     if !["anthropic", "openai", "google"].contains(&provider.as_str()) {
         return json!({ "ok": false });
     }
-    let mut current = state
-        .store
-        .get_or("settings.cliAdopted", json!({}));
+    let mut current = settings::cli_adopted(&state.store);
     current[provider] = json!(adopted);
     state.store.set("settings.cliAdopted", current.clone());
     state.cache.clear();
@@ -98,6 +96,7 @@ fn set_window_bounds(window: tauri::Window, bounds: Value) -> Value {
 
 #[tauri::command]
 fn save_settings(window: tauri::Window, state: State<'_, std::sync::Arc<AppState>>, settings: Value) -> Value {
+    let settings = settings::merge_saved_settings(state.store.get_or("settings", json!({})), &settings);
     // Settings with a window side effect have to be APPLIED here, not merely
     // stored: the config hard-codes alwaysOnTop, so without this the toggle
     // writes a value nothing reads and the widget stays pinned forever.

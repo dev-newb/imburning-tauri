@@ -46,18 +46,9 @@ impl Cache {
 /// install that already showed CLI-derived data is grandfathered as adopted.
 /// Mirrors the Electron build's cliAdoptionState().
 fn cli_adopted(store: &Store) -> (bool, bool, bool) {
-    if let Some(v) = store.get("settings.cliAdopted") {
-        if v.is_object() {
-            let flag = |k: &str| v.get(k).and_then(|b| b.as_bool()).unwrap_or(false);
-            return (flag("anthropic"), flag("openai"), flag("google"));
-        }
-    }
-    let existing = store.get("latestUsageData").is_some();
-    store.set(
-        "settings.cliAdopted",
-        json!({ "anthropic": existing, "openai": existing, "google": existing }),
-    );
-    (existing, existing, existing)
+    let adopted = crate::settings::cli_adopted(store);
+    let flag = |key: &str| adopted.get(key).and_then(|v| v.as_bool()).unwrap_or(false);
+    (flag("anthropic"), flag("openai"), flag("google"))
 }
 
 /// Detected-but-unadopted CLI logins, for the renderer's offer chips.
