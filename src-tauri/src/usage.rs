@@ -163,7 +163,7 @@ pub async fn fetch_all(
                     // login and left the section permanently empty. Ask the
                     // session probe instead, and only then give up on it.
                     if e.starts_with("AuthFailure")
-                        && !crate::anthropic::session_is_valid(app).await
+                        && crate::anthropic::session_is_invalid(app).await
                     {
                         crate::log_error("anthropic: session confirmed dead, clearing");
                         crate::anthropic::delete_session_key();

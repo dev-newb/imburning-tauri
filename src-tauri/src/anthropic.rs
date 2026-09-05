@@ -134,20 +134,29 @@ pub async fn fetch_via_webview(app: &AppHandle, url: &str) -> Result<Value, Stri
     let status = parsed.get("status").and_then(|s| s.as_i64()).unwrap_or(0);
     let body = parsed.get("bodyText").and_then(|b| b.as_str()).unwrap_or("");
 
-    // An explicit auth failure must be distinguishable from a shape problem,
-    // so a dead session can prompt re-login instead of looking like a bug.
-    if status == 401 || status == 403 {
-        return Err(format!("AuthFailure: HTTP {}", status));
+    let result = classify_fetch_result(status, body);
+    if result.as_ref().err().map(|e| e.starts_with("Cloudflare")).unwrap_or(false) {
+        destroy_fetch_webview(app);
     }
+    result
+}
+
+fn classify_fetch_result(status: i64, body: &str) -> Result<Value, String> {
+    // Challenge/shape failures never establish that the session is invalid.
     for (pattern, name) in BLOCKED {
         if body.contains(pattern) {
-            if name.starts_with("Cloudflare") {
-                destroy_fetch_webview(app);
-            }
             return Err(format!("{}: {}", name, &body[..body.len().min(200)]));
         }
     }
-    serde_json::from_str(body).map_err(|_| format!("InvalidJSON: {}", &body[..body.len().min(200)]))
+    let parsed = serde_json::from_str(body)
+        .map_err(|_| format!("InvalidJSON: {}", &body[..body.len().min(200)]))?;
+    if status == 401 || status == 403 {
+        return Err(format!("AuthFailure: HTTP {}", status));
+    }
+    if !(200..300).contains(&status) {
+        return Err(format!("HTTPFailure: HTTP {}", status));
+    }
+    Ok(parsed)
 }
 
 /// A per-request slot name; two fetches in flight must not read each other's
@@ -298,14 +307,14 @@ pub fn remember_session(app: &AppHandle) {
     }
 }
 
-/// Is the stored session still usable? The organizations endpoint is the
-/// cheapest thing that answers it, and it is the same call the login uses.
-pub async fn session_is_valid(app: &AppHandle) -> bool {
-    fetch_via_webview(app, "https://claude.ai/api/organizations")
-        .await
-        .ok()
-        .and_then(|orgs| pick_organization(&orgs))
-        .is_some()
+/// Only a JSON 401 from the authenticated session probe confirms expiry.
+/// Forbidden, malformed and unavailable responses leave the login intact.
+fn confirms_invalid_session(result: &Result<Value, String>) -> bool {
+    matches!(result, Err(error) if error == "AuthFailure: HTTP 401")
+}
+
+pub async fn session_is_invalid(app: &AppHandle) -> bool {
+    confirms_invalid_session(&fetch_via_webview(app, "https://claude.ai/api/organizations").await)
 }
 
 /// Chat-capable orgs only (API-only orgs report no usage), preferring a team
@@ -389,4 +398,30 @@ pub async fn fetch_usage(app: &AppHandle, org_id: &str) -> Result<Value, String>
         }
     }
     Ok(usage)
+}
+
+#[cfg(test)]
+mod response_tests {
+    use super::*;
+
+    #[test]
+    fn challenges_and_server_errors_are_not_usage_or_confirmed_expiry() {
+        for (status, body, prefix) in [
+            (403, "<html>Just a moment</html>", "CloudflareBlocked"),
+            (401, "Enable JavaScript and cookies to continue", "CloudflareChallenge"),
+            (401, "broken response", "InvalidJSON"),
+            (429, r#"{"error":"rate limited"}"#, "HTTPFailure"),
+            (500, r#"{"error":"server error"}"#, "HTTPFailure"),
+            (403, r#"{"error":"forbidden"}"#, "AuthFailure"),
+        ] {
+            let result = classify_fetch_result(status, body);
+            assert!(result.as_ref().unwrap_err().starts_with(prefix));
+            assert!(!confirms_invalid_session(&result));
+        }
+        assert!(!confirms_invalid_session(&Err("Request timeout".into())));
+        assert!(confirms_invalid_session(&classify_fetch_result(401, r#"{"error":"unauthorized"}"#)));
+        let ok = classify_fetch_result(200, r#"{"five_hour":{"utilization":12}}"#);
+        assert_eq!(ok.as_ref().unwrap()["five_hour"]["utilization"], 12);
+        assert!(!confirms_invalid_session(&ok));
+    }
 }
