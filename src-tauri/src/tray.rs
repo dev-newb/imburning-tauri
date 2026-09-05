@@ -10,11 +10,11 @@
 // status item its own slot, and the user tracks several accounts at once.
 
 use crate::store::Store;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::image::Image;
-use tauri::tray::{TrayIcon, TrayIconBuilder};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 
 const W: usize = 20;
@@ -319,11 +319,15 @@ fn sync_one(app: &AppHandle, name: &str, enabled: bool, badge: Option<Badge>, se
         .icon(image)
         .tooltip(&tooltip)
         .on_tray_icon_event(move |_, event| {
-            if let tauri::tray::TrayIconEvent::Click { .. } = event {
+            if is_toggle_click(&event) {
                 if let Some(window) = handle.get_webview_window("main") {
-                    let visible = window.is_visible().unwrap_or(false);
-                    let _ = if visible { window.hide() } else { window.show() };
-                    if !visible {
+                    let visible = window.is_visible().unwrap_or(false)
+                        && !window.is_minimized().unwrap_or(false);
+                    if visible {
+                        let _ = window.hide();
+                    } else {
+                        let _ = window.show();
+                        let _ = window.unminimize();
                         let _ = window.set_focus();
                     }
                 }
@@ -332,6 +336,39 @@ fn sync_one(app: &AppHandle, name: &str, enabled: bool, badge: Option<Badge>, se
         .build(app)
     {
         trays.insert(name.to_string(), tray);
+    }
+}
+
+fn is_toggle_click(event: &TrayIconEvent) -> bool {
+    matches!(event, TrayIconEvent::Click {
+        button: MouseButton::Left,
+        button_state: MouseButtonState::Up,
+        ..
+    })
+}
+
+#[cfg(test)]
+mod click_tests {
+    use super::*;
+
+    #[test]
+    fn only_left_button_release_toggles_the_window() {
+        let click = |button, button_state| TrayIconEvent::Click {
+            id: "test-tray".into(),
+            position: Default::default(),
+            rect: Default::default(),
+            button,
+            button_state,
+        };
+        assert!(is_toggle_click(&click(MouseButton::Left, MouseButtonState::Up)));
+        assert!(!is_toggle_click(&click(MouseButton::Left, MouseButtonState::Down)));
+        assert!(!is_toggle_click(&click(MouseButton::Right, MouseButtonState::Up)));
+        assert!(!is_toggle_click(&click(MouseButton::Middle, MouseButtonState::Up)));
+        assert!(!is_toggle_click(&TrayIconEvent::Enter {
+            id: "test-tray".into(),
+            position: Default::default(),
+            rect: Default::default(),
+        }));
     }
 }
 
