@@ -186,15 +186,37 @@ fn get_credentials(state: State<'_, std::sync::Arc<AppState>>) -> Value {
         || providers::antigravity::available()
         || oauth::load_tokens("openai").is_some()
         || oauth::load_tokens("google").is_some();
+    credential_status(&state.store, logged_in, claude_cli, external)
+}
+
+fn credential_status(store: &store::Store, logged_in: bool, claude_cli: bool, external: bool) -> Value {
     json!({
         "loggedIn": logged_in,
-        "organizationId": state.store.get_or("organizationId", Value::Null),
-        "organizations": state.store.get_or("organizations", json!([])),
+        "organizationId": store.get_or("organizationId", Value::Null),
+        "organizations": store.get_or("organizations", json!([])),
         "cliFallbackAvailable": claude_cli,
         "localProviderCredentialsAvailable": claude_cli || external,
         "providerFallbackAvailable": external,
-        "encryptionAvailable": false,
+        // The macOS backend stores session/OAuth secrets in Keychain and
+        // fails a write if it is unavailable; there is no plaintext fallback.
+        "encryptionAvailable": cfg!(target_os = "macos"),
     })
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod credential_tests {
+    use super::*;
+
+    #[test]
+    fn keychain_status_is_reported_even_before_the_first_login() {
+        let store = store::Store::in_memory(json!({}));
+        let disconnected = credential_status(&store, false, false, false);
+        assert_eq!(disconnected["encryptionAvailable"], true);
+        assert_eq!(disconnected["loggedIn"], false);
+        let connected = credential_status(&store, true, false, true);
+        assert_eq!(connected["encryptionAvailable"], true);
+        assert_eq!(connected["providerFallbackAvailable"], true);
+    }
 }
 
 #[tauri::command]
