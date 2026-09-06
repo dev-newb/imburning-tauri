@@ -2363,8 +2363,11 @@ body.sz4 .resets-at-text { display: none; }
 .settings-content { overflow-y: auto; overflow-x: auto; }
 
 @media (max-width: 520px) {
-    .settings-providers { grid-template-columns: 1fr; }
-    .settings-row-2col, .settings-row-2col.tray-colors-row { grid-template-columns: 1fr; }
+    /* The measuring panel already has its full target width, even when
+       opened over a compact window. Do not measure stacked columns. */
+    .settings-content:not(.measuring) .settings-providers { grid-template-columns: 1fr; }
+    .settings-content:not(.measuring) .settings-row-2col,
+    .settings-content:not(.measuring) .settings-row-2col.tray-colors-row { grid-template-columns: 1fr; }
 }
 
 /* Vertical squeeze â€” classes set by the renderer ONLY while the user has

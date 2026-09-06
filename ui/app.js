@@ -5,7 +5,6 @@ let countdownInterval = null;
 let latestUsageData = null;
 let isExpanded = false;
 let isCompactMode = false;
-let _settingsOpenedFromCompact = false;
 let usageChart = null;
 let graphVisible = false;
 let graphWasVisible = false; // preserves graph state across compact mode toggle
@@ -647,17 +646,24 @@ function setupEventListeners() {
         }
     });
 
-    // Settings close — return to exactly the window the user had before
+    // Keep the old bounds only when the chosen mode is unchanged. Otherwise
+    // saveSettings applies the new mode and owns the resulting geometry.
     elements.closeSettingsBtn.addEventListener('click', async () => {
+        const compactChanged = elements.compactModeToggle.checked !== isCompactMode;
         await saveSettings();
         elements.settingsOverlay.style.display = 'none';
-        if (_settingsOpenedFromCompact) {
-            _settingsOpenedFromCompact = false;
-            // Re-enter compact ourselves; don't restore the pre-compact bounds
-            window.electronAPI.settingsRestore({ reCompact: true });
-            window.electronAPI.setCompactMode(true);
-        } else {
-            window.electronAPI.settingsRestore();
+        await window.electronAPI.settingsRestore({ reCompact: compactChanged });
+        if (compactChanged) {
+            _windowUserSized = false;
+            _activePreset = null;
+            elements.wideBtn?.classList.remove('active');
+            elements.tallBtn?.classList.remove('active');
+        }
+        applySqueezeClasses();
+        if (compactChanged) {
+            // Done is an explicit resize. Measure now: a paused animation
+            // frame must not leave the normal view at its short seed height.
+            _forceFitHeight({ intrinsic: true, userAction: true, immediate: true });
         }
         startAutoUpdate();
         // Account toggles filter post-fetch, so a refetch applies them now
@@ -925,22 +931,18 @@ function setupEventListeners() {
     // Organization selector — change triggers immediate save and refresh
     elements.orgSelector.addEventListener('change', handleOrgChange);
 
-    // Settings button — always open full settings; if in compact mode, temporarily expand the window first
+    // Settings fits its own window, including when opened from compact.
     elements.settingsBtn.addEventListener('click', async () => {
         stopAutoUpdate();
-        if (isCompactMode) {
-            _settingsOpenedFromCompact = true;
-            window.electronAPI.setCompactMode(false);
-        }
         // Settings is a wide panel with its own geometry: fitSettingsWindow
         // sizes the window to it (width included) and settingsRestore puts
         // the exact previous bounds back on Done, whatever preset or
         // hand-size the user had.
         await loadSettings();
         elements.settingsOverlay.style.display = 'flex';
-        // Grow the window to show EVERY setting (and lock resizing) once the
-        // panel has laid out. Two frames: display change, then measure.
-        requestAnimationFrame(() => requestAnimationFrame(fitSettingsWindow));
+        // The measurement forces layout; waiting for animation frames can
+        // strand Settings in a compact window when macOS pauses painting.
+        await fitSettingsWindow();
     });
 
     // Close compact settings — apply compact toggle value then close
@@ -1669,11 +1671,11 @@ function _bannersHeight() {
 // transition; the preset continues to own geometry after it completes.
 // userAction marks a direct click (graph toggle, burn, hide): those may adopt
 // the new content height even in a hand-sized window; background refits never.
-function _forceFitHeight({ fitPreset = false, intrinsic = false, userAction = false } = {}) {
+function _forceFitHeight({ fitPreset = false, intrinsic = false, userAction = false, immediate = false } = {}) {
     if (isCompactMode) return;
     if (_windowUserSized && !fitPreset && !userAction) return;
     if (elements.settingsOverlay.style.display !== 'none') return;
-    requestAnimationFrame(() => {
+    const measure = () => {
         const th = _chromeHeight();
         const ch = intrinsic ? _intrinsicMainContentHeight() : elements.mainContent.scrollHeight;
         const bh = _bannersHeight();
@@ -1687,7 +1689,9 @@ function _forceFitHeight({ fitPreset = false, intrinsic = false, userAction = fa
             if (delta > 0 ? delta <= 2 : delta >= -12) return;
             window.electronAPI.resizeWindow(target, true, fitPreset, userAction);
         }
-    });
+    };
+    if (immediate) measure();
+    else requestAnimationFrame(measure);
 }
 
 // Title bar + bottom toolbar heights — every window-height computation
@@ -2601,14 +2605,17 @@ let _activePreset = null; // 'wide' | 'tall' | null — tracked synchronously fo
 let graphDetached = false; // true while the graph is popped out into its own window
 
 function applySqueezeClasses() {
+    // Settings has temporary bounds. They must not switch the dashboard to
+    // landscape or raise its native minimum height before it is restored.
+    if (elements.settingsOverlay.style.display !== 'none') return;
     const w = window.innerWidth;
     const h = window.innerHeight;
     const on = _windowUserSized;
 
     // Landscape: wider than tall with room for three columns — the provider
     // sections sit side by side and every width band keys on COLUMN width
-    const landscape = on && w > h && w >= 760;
-    if (window._lastLandscapeMin !== landscape) {
+    const landscape = !isCompactMode && on && w > h && w >= 760;
+    if (!isCompactMode && window._lastLandscapeMin !== landscape) {
         window._lastLandscapeMin = landscape;
         if (window.electronAPI.setMinHeight) window.electronAPI.setMinHeight(landscape ? 340 : 180);
     }
@@ -2649,6 +2656,7 @@ function applySqueezeClasses() {
 
 if (window.electronAPI.onWindowUserSized) {
     window.electronAPI.onWindowUserSized((userSized) => {
+        if (elements.settingsOverlay.style.display !== 'none') return;
         _windowUserSized = userSized;
         applySqueezeClasses();
         // Resumed auto-height (e.g. a preset "reset", or the user dragging the
@@ -3672,6 +3680,13 @@ function sparkPressBtn(btn) {
 
 function applyCompactMode(compact) {
     isCompactMode = compact;
+    // Debounced view saves share this cache. Publish the chosen mode before
+    // resizing or restoring the graph can schedule a save with the old one.
+    if (window._cachedSettings) window._cachedSettings.compactMode = compact;
+    if (_saveCompactTimer) {
+        clearTimeout(_saveCompactTimer);
+        _saveCompactTimer = null;
+    }
 
     // Press slams down while the widget is crushed
     const pressBtn = document.getElementById('compactPressBtn');
@@ -3716,7 +3731,7 @@ function applyCompactMode(compact) {
     }
 
     // Tell main process to resize the window width
-    window.electronAPI.setCompactMode(compact);
+    const resized = window.electronAPI.setCompactMode(compact);
 
     // Sync both settings toggles
     if (elements.compactModeToggle) elements.compactModeToggle.checked = compact;
@@ -3728,6 +3743,7 @@ function applyCompactMode(compact) {
 
     // Persist graph/expanded state changes caused by compact mode toggle
     _saveViewState();
+    return resized;
 }
 
 // Compact mode: one slim [code][bar][%] row per active pool across ALL
@@ -4910,7 +4926,7 @@ function fitSettingsWindow() {
     const needed = Math.ceil(content.getBoundingClientRect().height) + 2;
     content.style.width = '';
     content.classList.remove('measuring');
-    if (needed >= 120) window.electronAPI.settingsFit(needed, neededWidth);
+    if (needed >= 120) return window.electronAPI.settingsFit(needed, neededWidth);
 }
 
 // Settings management
@@ -5046,7 +5062,7 @@ async function saveSettings() {
     // Apply compact mode change first, then include in saved settings
     const compactToggleValue = elements.compactModeToggle.checked;
     if (compactToggleValue !== isCompactMode) {
-        applyCompactMode(compactToggleValue);
+        await applyCompactMode(compactToggleValue);
     }
 
     const settings = {
