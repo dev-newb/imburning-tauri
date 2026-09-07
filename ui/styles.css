@@ -2629,7 +2629,9 @@ body.sz4 .usage-headers { grid-template-columns: 46px 44px 36px 36px; justify-co
 }
 .subheading-row > .cli-account-email {
     margin-left: auto;
-    max-width: min(100%, 221px);
+    width: var(--account-email-width);
+    max-width: 100%;
+    text-align: center;
     letter-spacing: 0.2px;
     color: #6b7080;
 }
@@ -3699,10 +3701,11 @@ button:focus:not(:focus-visible) { outline: none; }
     appearance: none;
 }
 
-/* ---- Per-provider account email under the section header -------------------
-   Shown in every layout — it lives on its own wrapped line under the provider
-   name, so even the narrow portrait widget has room for it. Muted, small,
-   with a hide pill matching the row-hide pills. (Settings can hide them all.) */
+/* ---- Account emails share a centered column -------------------------------
+   Primary and CLI addresses use equal text widths, so different-length
+   addresses share a center line. Narrow headers can wrap the column below
+   the provider name. The hide button stays outside the centered text area. */
+.provider-section { --account-email-width: 180px; }
 .account-email {
     display: inline-flex;
     align-items: center;
@@ -3712,17 +3715,15 @@ button:focus:not(:focus-visible) { outline: none; }
     position: relative;
     z-index: 6;
     text-shadow: 0 1px 3px rgba(10, 12, 24, 0.9), 0 0 6px rgba(10, 12, 24, 0.55);
-    /* Pinned to the header row's RIGHT edge (margin-left:auto soaks up the
-       slack), so every provider's email sits in the same spot regardless of
-       how wide the provider name renders. Wraps to its own right-aligned
-       line when the header is too narrow for both. */
+    /* Reserve the same text column as CLI, plus its hide button and gap. */
     order: 99;
     margin-left: auto;
     margin-top: 1px;
     font-size: 10px;
     letter-spacing: 0.2px;
     color: #6b7080;
-    max-width: 240px;
+    width: calc(var(--account-email-width) + 19px);
+    max-width: calc(100% - 24px);
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -3730,6 +3731,9 @@ button:focus:not(:focus-visible) { outline: none; }
 /* The header is a flex row; a full-basis child wraps onto a new line. */
 .section-header { flex-wrap: wrap; }
 .account-email-text {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;
 }
