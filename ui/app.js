@@ -899,7 +899,10 @@ function setupEventListeners() {
             elements.updateBannerText.textContent = '▲  Updating — reopens when the rebuild finishes';
             window.electronAPI.runMacUpdate();
         } else {
-            window.electronAPI.openExternal(`${APP_REPO}/releases/latest`);
+            const url = _updateReleaseTag
+                ? `${APP_REPO}/releases/tag/${encodeURIComponent(_updateReleaseTag)}`
+                : `${APP_REPO}/releases/latest`;
+            window.electronAPI.openExternal(url);
         }
     };
     elements.updateBannerText.addEventListener('click', applyUpdateClick);
@@ -5169,6 +5172,7 @@ function applyFontColor(settings) {
 // Update check
 let _updateCheckRetries = 0;
 let _lastUpdateCheckAt = 0;
+let _updateReleaseTag = null;
 async function checkForUpdate() {
     _lastUpdateCheckAt = Date.now();
     try {
@@ -5189,6 +5193,7 @@ async function checkForUpdate() {
         if (!result.hasUpdate) return;
 
         const version = result.version;
+        _updateReleaseTag = typeof result.tag === 'string' ? result.tag : null;
         // A macOS source install rebuilds itself, so it offers "update" rather
         // than sending the user off to a releases page with no Mac asset on it.
         _canSelfUpdate = !!result.canSelfUpdate;
