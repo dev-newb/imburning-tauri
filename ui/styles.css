@@ -2620,7 +2620,19 @@ body.sz4 .usage-headers { grid-template-columns: 46px 44px 36px 36px; justify-co
     text-transform: none;
     color: var(--text-secondary, #8b91a3);
 }
-.subheading-row:has(.cli-account-email) { gap: 8px; flex-wrap: wrap; }
+.subheading-row:has(> .cli-account-email) {
+    gap: 8px;
+    flex-wrap: wrap;
+    /* Match the main email's text edge: header padding (14), dynamite
+       button and gap (18 + 6), and email hide button and gap (14 + 5). */
+    padding-right: 57px;
+}
+.subheading-row > .cli-account-email {
+    margin-left: auto;
+    max-width: min(100%, 221px);
+    letter-spacing: 0.2px;
+    color: #6b7080;
+}
 /* The compact two-account heading needs room for the address below its pill. */
 .dual-head:has(.dual-account-email) { min-height: 34px; height: auto; }
 .dual-head .dual-account-email {
