@@ -141,7 +141,8 @@
       "gemini": 55,
       "codexCli": 23,
       "geminiCli": 77,
-      "claudeCli": 88
+      "claudeCli": 88,
+      "accountIdentities": {}
     }
   },
   {
@@ -168,7 +169,8 @@
       "design": null,
       "oauthApps": null,
       "extraUsage": null,
-      "codex": 0
+      "codex": 0,
+      "accountIdentities": {}
     }
   },
   {
@@ -210,7 +212,8 @@
       "oauthApps": null,
       "extraUsage": null,
       "codexCli": 0,
-      "geminiCli": 35
+      "geminiCli": 35,
+      "accountIdentities": {}
     }
   },
   {
@@ -236,7 +239,8 @@
       "cowork": null,
       "design": null,
       "oauthApps": null,
-      "extraUsage": null
+      "extraUsage": null,
+      "accountIdentities": {}
     }
   },
   {
@@ -268,5 +272,48 @@
       }
     },
     "expected": null
+  },
+  {
+    "name": "account identities separate desktop and CLI without persisting emails",
+    "input": {
+      "codex": {
+        "accountId": "desktop-id",
+        "email": "desktop@example.test",
+        "connected": true,
+        "source": "live",
+        "limits": [
+          {
+            "percent": 50
+          }
+        ],
+        "cli": {
+          "email": "  CLI@Example.Test ",
+          "connected": false,
+          "source": "live",
+          "limits": [
+            {
+              "percent": 55
+            }
+          ]
+        }
+      }
+    },
+    "expected": {
+      "timestamp": 1788609600000,
+      "accountIdentities": {
+        "codex": "950bac0fb6246689de0a8a4aa85493385c2f774ac154b126eab2dc689526d682",
+        "codexCli": "50a7f47138a5c890251cf7034867c6d95e1b3d1c05cf702cc3e901cacf1fcad3"
+      },
+      "session": null,
+      "weekly": null,
+      "sonnet": null,
+      "opus": null,
+      "cowork": null,
+      "design": null,
+      "oauthApps": null,
+      "extraUsage": null,
+      "codex": 50,
+      "codexCli": 55
+    }
   }
 ]

@@ -327,6 +327,29 @@ static BURNING: Mutex<Option<HashMap<String, i64>>> = Mutex::new(None);
 /// seriesKey -> when it last raised a notification (throttling is separate
 /// from the flames, which are live state).
 static ALERTED: Mutex<Option<HashMap<String, i64>>> = Mutex::new(None);
+static ACCOUNT_IDENTITIES: Mutex<Option<Value>> = Mutex::new(None);
+const PROVIDER_SERIES: [&str; 4] = ["codex", "codexCli", "gemini", "geminiCli"];
+
+fn same_account_history<'a>(history: &'a [Value], key: &str) -> &'a [Value] {
+    if !PROVIDER_SERIES.contains(&key) { return history; }
+    let identity = |entry: &'a Value| entry.get("accountIdentities").and_then(|v| v.get(key)).and_then(Value::as_str);
+    let Some(id) = history.last().and_then(identity) else { return &[] };
+    let start = history.iter().rposition(|entry| identity(entry) != Some(id)).map_or(0, |i| i + 1);
+    &history[start..]
+}
+
+fn reset_changed_burn_accounts(history: &[Value]) {
+    let identities = history.last().and_then(|e| e.get("accountIdentities")).cloned().unwrap_or(json!({}));
+    if let Ok(mut previous) = ACCOUNT_IDENTITIES.lock() {
+        for key in PROVIDER_SERIES {
+            if previous.as_ref().and_then(|p| p.get(key)) == identities.get(key) { continue; }
+            if let Ok(mut map) = BURNING.lock() { map.get_or_insert_with(HashMap::new).remove(key); }
+            if let Ok(mut map) = ALERTED.lock() { map.get_or_insert_with(HashMap::new).remove(key); }
+            if let Ok(mut pending) = PENDING.lock() { pending.retain(|alert| alert.key != key); }
+        }
+        *previous = Some(identities);
+    }
+}
 
 pub fn burning_series_map() -> Value {
     let now = now_ms();
@@ -374,6 +397,7 @@ pub fn drain_alerts() -> Vec<BurnAlert> {
 /// the caller's job — this stays pure enough to test.
 pub fn check_burn_anomalies(history: &[Value], store: &Store) -> Vec<BurnAlert> {
     let mut alerts = vec![];
+    reset_changed_burn_accounts(history);
     if !store.get_or("settings.burnAlerts", json!(true)).as_bool().unwrap_or(true) {
         return alerts;
     }
@@ -396,7 +420,7 @@ pub fn check_burn_anomalies(history: &[Value], store: &Store) -> Vec<BurnAlert> 
         ("claudeCli", "Anthropic — Claude Models 7d (CLI account)"),
     ]
     .into_iter()
-    .map(|(k, l)| (k.to_string(), l.to_string(), series(history, k)))
+    .map(|(k, l)| (k.to_string(), l.to_string(), series(same_account_history(history, k), k)))
     .collect();
 
     for slug in scoped_slugs(history) {
@@ -533,5 +557,34 @@ fn cool(key: &str, until: i64) {
         if let Some(entry) = guard.get_or_insert_with(HashMap::new).get_mut(key) {
             *entry = (*entry).min(until);
         }
+    }
+}
+
+#[cfg(test)]
+mod account_alert_tests {
+    use super::*;
+
+    #[test]
+    fn account_switch_does_not_emit_burn_but_later_usage_does() {
+        let store = Store::in_memory(json!({"settings": {"burnAlerts": true}}));
+        let now = now_ms();
+        let sample = |id: &str, percent: i64, minute: i64| json!({
+            "timestamp": now + minute * 60000, "codex": percent, "accountIdentities": {"codex": id}
+        });
+        let mut history: Vec<Value> = (0..5).map(|i| sample("cli", 50 + i, i)).collect();
+        assert!(check_burn_anomalies(&history, &store).is_empty());
+        history.push(sample("desktop", 100, 5));
+        assert_eq!(same_account_history(&history, "codex").len(), 1);
+        assert!(check_burn_anomalies(&history, &store).is_empty());
+        assert!(drain_alerts().is_empty());
+        history.push(sample("desktop", 0, 6));
+        for i in 7..=16 { history.push(sample("desktop", (i - 6) * 8, i)); }
+        assert_eq!(check_burn_anomalies(&history, &store).len(), 1);
+        assert_eq!(drain_alerts().len(), 1);
+        history.push(sample("third", 95, 17));
+        assert!(check_burn_anomalies(&history, &store).is_empty());
+        assert!(burning_series_map().get("codex").is_none());
+        history.push(json!({"timestamp": now + 18 * 60000, "codex": 20}));
+        assert!(same_account_history(&history, "codex").is_empty());
     }
 }

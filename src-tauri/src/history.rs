@@ -120,7 +120,7 @@ pub fn would_record(data: &Value) -> bool {
 
 fn sample(data: &Value, timestamp: i64) -> Option<Value> {
     if !would_record(data) { return None; }
-    let mut entry = json!({"timestamp": timestamp});
+    let mut entry = json!({"timestamp": timestamp, "accountIdentities": account_identities(data)});
     for (key, field) in [
         ("session", "five_hour"), ("weekly", "seven_day"),
         ("sonnet", "seven_day_sonnet"), ("opus", "seven_day_opus"),
@@ -152,6 +152,23 @@ fn sample(data: &Value, timestamp: i64) -> Option<Value> {
         }
     }
     Some(entry)
+}
+
+// Match Electron's account boundaries without storing another copy of emails.
+fn account_identities(data: &Value) -> Value {
+    let mut out = serde_json::Map::new();
+    for (key, path) in [("codex", "/codex"), ("codexCli", "/codex/cli"),
+        ("gemini", "/gemini"), ("geminiCli", "/gemini/cli")] {
+        let Some(account) = data.pointer(path) else { continue };
+        if account.get("limits").and_then(Value::as_array).map_or(true, |l| l.is_empty()) { continue; }
+        let id = account.get("accountId").and_then(Value::as_str).filter(|s| !s.is_empty()).map(String::from)
+            .or_else(|| account.get("email").and_then(Value::as_str).map(|s| s.trim().to_lowercase()));
+        let Some(id) = id.filter(|s| !s.is_empty()) else { continue };
+        let identity = json!([id, account.get("connected").and_then(Value::as_bool).unwrap_or(false),
+            account.get("source").and_then(Value::as_str).unwrap_or("")]);
+        out.insert(key.into(), json!(format!("{:x}", Sha256::digest(identity.to_string().as_bytes()))));
+    }
+    Value::Object(out)
 }
 
 pub fn record(scope: &str, data: &Value) {

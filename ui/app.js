@@ -446,10 +446,10 @@ async function playAlertSound(kind, { force = false } = {}) {
 // Burn-spike: fire once when a series newly starts burning.
 let _prevBurningKeys = new Set();
 let _burnWatchSeeded = false;
-function checkBurnSpikeSound(keys) {
+function checkBurnSpikeSound(keys, changedAccounts = new Set()) {
     if (_burnWatchSeeded) {
         for (const k of keys) {
-            if (!_prevBurningKeys.has(k)) { playAlertSound('burn'); break; }
+            if (!changedAccounts.has(alertPoolAccount(k)) && !_prevBurningKeys.has(k)) { playAlertSound('burn'); break; }
         }
     }
     _prevBurningKeys = new Set(keys);
@@ -726,6 +726,7 @@ function setupEventListeners() {
         const result = await window.electronAPI.oauthConnect(provider);
         if (doneFn) doneFn();
         if (result.ok) {
+            resetAccountAlertBaseline(provider);
             credentials = await window.electronAPI.getCredentials();
             await fetchUsageData({ forceExtended: true });
             if (elements.settingsOverlay.style.display !== 'none') await loadSettings();
@@ -769,6 +770,7 @@ function setupEventListeners() {
         if (!btn) return;
         btn.addEventListener('click', async () => {
             await window.electronAPI.oauthDisconnect(provider);
+            resetAccountAlertBaseline(provider);
             await fetchUsageData({ forceExtended: true });
             await loadSettings();
         });
@@ -2025,6 +2027,7 @@ function detonateProvider(prov) {
 async function updateCliAdoption(provider, adopted) {
     const result = await window.electronAPI.setCliAdopted(provider, adopted);
     if (!result || result.ok !== true) throw new Error('Could not save CLI adoption');
+    resetAccountAlertBaseline(provider);
     window._cachedSettings = window._cachedSettings || {};
     window._cachedSettings.cliAdopted = result.state || {
         ...(window._cachedSettings.cliAdopted || {}), [provider]: adopted === true
@@ -3345,7 +3348,6 @@ function computeBurningRowKeys(data) {
 function updateUI(data) {
     latestUsageData = normalizeUsageData(data);
     _burningRowKeys = computeBurningRowKeys(data);
-    checkBurnSpikeSound(_burningRowKeys);
 
     showMainContent();
     buildExtraRows(data);
@@ -3464,15 +3466,54 @@ function updateUI(data) {
     // Update compact bars in parallel if compact mode is active
     if (isCompactMode) updateCompactBars(data);
 
-    // On first load, seed alert flags so we don't fire for thresholds
-    // the user can already see when the app starts
-    if (isFirstDataLoad) {
+    checkAccountAlerts(data);
+}
+
+// Alert baselines belong to an account, not its current desktop/CLI slot.
+// Missing providers are forgotten so their next successful reading is quiet.
+let _alertAccounts = {};
+function alertAccountIdentities(data) {
+    const identity = (account) => account?.limits?.length ? JSON.stringify([
+        account.accountId || String(account.email || '').trim().toLowerCase(),
+        !!account.connected, account.source || ''
+    ]) : null;
+    return {
+        anthropic: (data.five_hour || data.seven_day) ? JSON.stringify([
+            credentials?.organizationId || '', data.anthropic_email || '', data.anthropic_source || ''
+        ]) : null,
+        claudeCli: data.claude_code ? identity(data.claude_code) : null,
+        codex: identity(data.codex), codexCli: identity(data.codex?.cli),
+        gemini: identity(data.gemini), geminiCli: identity(data.gemini?.cli)
+    };
+}
+
+function alertPoolAccount(key) {
+    if (key.startsWith('codex_cli_')) return 'codexCli';
+    if (key.startsWith('codex_')) return 'codex';
+    if (key.startsWith('gemini_cli_')) return 'geminiCli';
+    if (key.startsWith('gemini_')) return 'gemini';
+    if (key.startsWith('cc_')) return 'claudeCli';
+    return 'anthropic';
+}
+
+function resetAccountAlertBaseline(provider) {
+    const accounts = { openai: ['codex', 'codexCli'], google: ['gemini', 'geminiCli'],
+        anthropic: ['anthropic', 'claudeCli'] }[provider] || [];
+    for (const account of accounts) delete _alertAccounts[account];
+}
+
+function checkAccountAlerts(data) {
+    const accounts = alertAccountIdentities(data);
+    const changed = new Set(Object.keys(accounts).filter((key) => accounts[key] !== _alertAccounts[key]));
+    _alertAccounts = accounts;
+    checkBurnSpikeSound(computeBurningRowKeys(data), changed);
+    if (isFirstDataLoad || changed.has('anthropic')) {
         isFirstDataLoad = false;
+        for (const key of Object.keys(alertFired)) alertFired[key] = false;
         seedAlertFlags(data);
     }
-
     checkUsageAlerts(data);
-    checkEarlyResets(data);
+    checkEarlyResets(data, changed);
 }
 
 // ---- Early-reset fanfare -------------------------------------------------
@@ -3511,9 +3552,19 @@ function resetWatchPools(data) {
     return out;
 }
 
-function checkEarlyResets(data) {
+function checkEarlyResets(data, changedAccounts = new Set()) {
     const pools = resetWatchPools(data);
     const bank = data.codex?.resetCredits?.available ?? null;
+
+    if (_resetWatch) {
+        for (const key of Object.keys(_resetWatch)) {
+            if (changedAccounts.has(alertPoolAccount(key))) {
+                delete _resetWatch[key];
+                _blockedKeys?.delete(key);
+            }
+        }
+    }
+    if (changedAccounts.has('codex')) _resetBank = null;
 
     if (_resetWatch === null) {          // first load: just take the baseline
         _resetWatch = {};
@@ -3551,15 +3602,18 @@ function checkEarlyResets(data) {
             : '';
         window.electronAPI.showNotification('Limit reached — ' + wallPool.label,
             wallPool.label + ' is at 100%.' + when);
-    } else if (_blockedKeys && _blockedKeys.size > 0 && nowBlocked.size === 0) {
+    } else if (_blockedKeys && _blockedKeys.size > 0 && nowBlocked.size === 0
+        && [..._blockedKeys].every((key) => pools.some((p) => p.key === key))) {
         // Every wall the user had hit has cleared — worth a heads-up (the
         // reset itself already made its sound; this is the notification).
         window.electronAPI.showNotification("I'm Burning!", 'Usage is available again.');
     }
     _blockedKeys = nowBlocked;
+    // A missing pool must not reappear later as an apparent crossing/reset.
+    _resetWatch = Object.fromEntries(pools.map((p) => [p.key, p]));
 
     const banked = bank != null && _resetBank != null && bank > _resetBank;
-    if (bank != null) _resetBank = bank;
+    _resetBank = bank;
 
     // A limit clearing early and a banked reset landing are different events,
     // so they get different sounds. If somehow both happen on one refresh,
