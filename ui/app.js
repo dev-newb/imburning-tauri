@@ -108,6 +108,7 @@ const elements = {
     connectRowGoogle: document.getElementById('connectRowGoogle'),
     connectGoogleBtn: document.getElementById('connectGoogleBtn'),
     connectErrorGoogle: document.getElementById('connectErrorGoogle'),
+    googleUsageStatus: document.getElementById('googleUsageStatus'),
     settingsConnectOpenaiBtn: document.getElementById('settingsConnectOpenaiBtn'),
     settingsConnectGoogleBtn: document.getElementById('settingsConnectGoogleBtn'),
     disconnectOpenaiBtn: document.getElementById('disconnectOpenaiBtn'),
@@ -3404,7 +3405,7 @@ function updateUI(data) {
         ? 'Your claude CLI is logged into a different account - tracked separately here. Click to hide these rows.'
         : '');
     if (elements.connectRowOpenai) elements.connectRowOpenai.style.display = cxStatus ? 'none' : '';
-    if (elements.connectRowGoogle) elements.connectRowGoogle.style.display = gmStatus ? 'none' : '';
+    syncGoogleAuthControls(data);
 
     // Frozen providers — logo goes on ice when an account has sat unused
     const frozen = data.frozenProviders || {};
@@ -4936,6 +4937,32 @@ function fitSettingsWindow() {
 let warnThreshold = 75;
 let dangerThreshold = 90;
 
+function syncGoogleAuthControls(data = latestUsageData, connection = data?.googleConnection || credentials?.googleConnection) {
+    const quota = data?.gemini;
+    // Older runtimes can still supply only the original quota payload.
+    const connected = connection ? connection.connected : !!quota?.connected;
+    const messages = {
+        'subscription-required': 'Signed in to Google. Code Assist quota requires an eligible subscription for this account.',
+        'access-denied': 'Signed in to Google. This account does not have access to Code Assist quota.',
+        'quota-unavailable': 'Signed in to Google. Code Assist usage is temporarily unavailable; refresh to try again.',
+        'reauth-required': 'Your Google authorization has expired. Sign in again.'
+    };
+    const issue = connection?.usageIssue;
+    const message = messages[issue] || (connected && !quota ? 'Signed in to Google. Waiting for Code Assist usage.' : '');
+    if (elements.connectRowGoogle) elements.connectRowGoogle.style.display = connected || (quota && issue !== 'reauth-required') ? 'none' : '';
+    if (elements.googleUsageStatus) {
+        elements.googleUsageStatus.textContent = message;
+        elements.googleUsageStatus.style.display = message ? '' : 'none';
+    }
+    if (elements.googleLoginStatus) {
+        elements.googleLoginStatus.textContent = message || (connected ? (connection?.email || quota?.email || 'Connected')
+            : (quota ? 'Not connected (using CLI login)' : 'Not connected'));
+        elements.googleLoginStatus.classList.remove('login-status-error');
+    }
+    if (elements.disconnectGoogleBtn) elements.disconnectGoogleBtn.style.display = connected ? '' : 'none';
+    if (elements.settingsConnectGoogleBtn) elements.settingsConnectGoogleBtn.style.display = connected ? 'none' : '';
+}
+
 async function loadSettings() {
     // Credential state can change outside the renderer (logout, CLI login, or
     // an expired web session), so derive the Anthropic action fresh each time.
@@ -5030,15 +5057,7 @@ async function loadSettings() {
         elements.disconnectOpenaiBtn.style.display = cxConn ? '' : 'none';
         elements.settingsConnectOpenaiBtn.style.display = cxConn ? 'none' : '';
     }
-    if (elements.googleLoginStatus) {
-        const gmNow = latestUsageData && latestUsageData.gemini;
-        const gmConn = !!(gmNow && gmNow.connected);
-        elements.googleLoginStatus.textContent = gmConn ? (gmNow.email || 'Connected')
-            : (gmNow ? 'Not connected (using CLI login)' : 'Not connected');
-        elements.googleLoginStatus.classList.remove('login-status-error');
-        elements.disconnectGoogleBtn.style.display = gmConn ? '' : 'none';
-        elements.settingsConnectGoogleBtn.style.display = gmConn ? 'none' : '';
-    }
+    syncGoogleAuthControls(latestUsageData, credentials?.googleConnection);
 
     // Populate org selector if user has organizations
     if (credentials.organizations && credentials.organizations.length > 0) {

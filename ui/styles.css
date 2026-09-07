@@ -3820,3 +3820,9 @@ canvas.detonate-fx {
     85% { transform: translate(2px, -1px); }
 }
 .account-email-hide:hover { background: rgba(200, 90, 90, 0.35); color: #fff; }
+.provider-usage-status {
+    color: var(--text-secondary, #a1a1aa);
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 6px 0;
+}
