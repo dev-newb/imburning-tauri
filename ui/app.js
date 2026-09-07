@@ -504,7 +504,7 @@ function setupEventListeners() {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             await _saveSettingsPatch({ hideAccountEmails: true });
-            if (latestUsageData) renderAccountEmails(latestUsageData);
+            if (latestUsageData) updateUI(latestUsageData);
         });
     });
 
@@ -1848,8 +1848,8 @@ function renderAccountEmails(data) {
     const hidden = (window._cachedSettings || {}).hideAccountEmails === true;
     const pick = {
         Anthropic: data.anthropic_email || null,
-        Openai: (data.codex && (data.codex.email || (data.codex.cli && data.codex.cli.email))) || null,
-        Google: (data.gemini && (data.gemini.email || (data.gemini.cli && data.gemini.cli.email))) || null
+        Openai: data.codex?.email || null,
+        Google: data.gemini?.email || null
     };
     for (const prov of ['Anthropic', 'Openai', 'Google']) {
         const el = document.getElementById('email' + prov);
@@ -1862,6 +1862,13 @@ function renderAccountEmails(data) {
         } else {
             el.style.display = 'none';
         }
+    }
+    for (const [prov, email] of [['Openai', data.codex?.cli?.email], ['Google', data.gemini?.cli?.email]]) {
+        const el = document.getElementById('email' + prov + 'Cli');
+        if (!el) continue;
+        el.textContent = !hidden && email ? email : '';
+        el.title = !hidden && email ? email : '';
+        el.style.display = !hidden && email ? '' : 'none';
     }
 }
 
@@ -3050,6 +3057,15 @@ function renderDualTables(data) {
                 pill.appendChild(s);
             });
         }
+        const cliEmail = company === 'openai' ? data.codex?.cli?.email
+            : company === 'google' ? data.gemini?.cli?.email : null;
+        if (cliEmail && !(window._cachedSettings || {}).hideAccountEmails) {
+            const email = document.createElement('span');
+            email.className = 'cli-account-email dual-account-email';
+            email.textContent = cliEmail;
+            email.title = cliEmail;
+            pill.appendChild(email);
+        }
         if (hiddenMap[company + '_cli']) pill.classList.add('burnt');
         pill.addEventListener('click', async () => {
             if (pill.dataset.animating) return;
@@ -3395,10 +3411,11 @@ function updateUI(data) {
     applyProviderVisibility();
     // The amber pill IS the CLI subheading now — give it the account detail
     const pillTitle = (sel, t) => { const b = document.querySelector(sel); if (b) b.title = t; };
-    pillTitle('#sgOpenaiCli .subheading', cxStatus && cxStatus.cli
+    const emailsHidden = (window._cachedSettings || {}).hideAccountEmails;
+    pillTitle('#sgOpenaiCli .subheading', !emailsHidden && cxStatus && cxStatus.cli
         ? 'Your codex CLI (' + (cxStatus.cli.email || 'other account') + ') differs from ' + (cxStatus.email || 'the connected account') + '. Click to hide these rows.'
         : '');
-    pillTitle('#sgGoogleCli .subheading', gmStatus && gmStatus.cli
+    pillTitle('#sgGoogleCli .subheading', !emailsHidden && gmStatus && gmStatus.cli
         ? 'Your gemini CLI (' + (gmStatus.cli.email || 'other account') + ') differs from ' + (gmStatus.email || 'the connected account') + '. Click to hide these rows.'
         : '');
     pillTitle('#sgAnthropicCli .subheading', (data.claude_code && data.claude_code_same_account === false)

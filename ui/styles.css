@@ -2609,6 +2609,30 @@ body.lbl-code .usage-headers { grid-template-columns: 46px 44px 36px 72px 68px; 
 body.sz3 .usage-headers { grid-template-columns: 46px 44px 36px 36px 68px; justify-content: start; gap: clamp(3px, 2vw, 8px); }
 body.sz4 .usage-headers { grid-template-columns: 46px 44px 36px 36px; justify-content: start; gap: clamp(3px, 1.8vw, 7px); }
 
+.cli-account-email {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+    font-weight: normal;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--text-secondary, #8b91a3);
+}
+.subheading-row:has(.cli-account-email) { gap: 8px; flex-wrap: wrap; }
+/* The compact two-account heading needs room for the address below its pill. */
+.dual-head:has(.dual-account-email) { min-height: 34px; height: auto; }
+.dual-head .dual-account-email {
+    display: block;
+    max-width: 100%;
+    font-size: 9px;
+    font-weight: normal;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--text-secondary, #8b91a3);
+}
+
 /* ---- The CLI subheading IS the second-account pill now ---- */
 /* Quiet amber text, no pill box (the framed background read as cheap chrome) */
 .subheading.cli-pill {

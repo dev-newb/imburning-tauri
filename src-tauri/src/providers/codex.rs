@@ -10,6 +10,7 @@ const CHROME_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWe
 pub struct Candidate {
     pub access_token: String,
     pub account_id: Option<String>,
+    pub email: Option<String>,
 }
 
 /// Claims out of a JWT body. Display/expiry only — never a trust decision.
@@ -20,24 +21,31 @@ fn jwt_claims(token: &str) -> Option<Value> {
     serde_json::from_slice(&bytes).ok()
 }
 
+fn candidate_from_auth(json: &Value, now: i64) -> Option<Candidate> {
+    let tokens = json.get("tokens")?;
+    let access = tokens.get("access_token")?.as_str()?;
+    // An expired access token means the session-log fallback should be
+    // used instead — skip rather than sending a request that will 401.
+    if let Some(exp) = jwt_claims(access).and_then(|c| c.get("exp").and_then(|v| v.as_i64())) {
+        if now >= exp {
+            return None;
+        }
+    }
+    Some(Candidate {
+        access_token: access.to_string(),
+        account_id: tokens.get("account_id").and_then(|v| v.as_str()).map(String::from),
+        email: tokens.get("id_token").and_then(Value::as_str).and_then(crate::providers::jwt_email),
+    })
+}
+
 pub fn read_candidates() -> Vec<Candidate> {
     let mut out = vec![];
     for path in local_credential_files(".codex", "auth.json") {
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
         let Ok(json) = serde_json::from_str::<Value>(&text) else { continue };
-        let Some(tokens) = json.get("tokens") else { continue };
-        let Some(access) = tokens.get("access_token").and_then(|v| v.as_str()) else { continue };
-        // An expired access token means the session-log fallback should be
-        // used instead — skip rather than sending a request that will 401.
-        if let Some(exp) = jwt_claims(access).and_then(|c| c.get("exp").and_then(|v| v.as_i64())) {
-            if chrono::Utc::now().timestamp() >= exp {
-                continue;
-            }
+        if let Some(candidate) = candidate_from_auth(&json, chrono::Utc::now().timestamp()) {
+            out.push(candidate);
         }
-        out.push(Candidate {
-            access_token: access.to_string(),
-            account_id: tokens.get("account_id").and_then(|v| v.as_str()).map(String::from),
-        });
     }
     out
 }
@@ -191,6 +199,7 @@ pub async fn fetch(client: &reqwest::Client, cli_allowed: bool) -> Option<Provid
                 Candidate {
                     access_token: access.to_string(),
                     account_id: tokens.get("accountId").and_then(|v| v.as_str()).map(String::from),
+                    email: tokens.get("email").and_then(Value::as_str).map(String::from),
                 },
                 true,
             ));
@@ -201,6 +210,7 @@ pub async fn fetch(client: &reqwest::Client, cli_allowed: bool) -> Option<Provid
         candidates.extend(read_candidates().into_iter().map(|c| (c, false)));
     }
 
+    let mut results = vec![];
     for (candidate, widget_login) in candidates {
         let mut req = client
             .get(USAGE)
@@ -217,12 +227,83 @@ pub async fn fetch(client: &reqwest::Client, cli_allowed: bool) -> Option<Provid
         if let Some(mut data) = normalize(&json, widget_login) {
             // Prefer the identity from the login itself; the usage payload
             // does not always carry an email.
-            if widget_login && data.email.is_none() {
-                data.email = crate::oauth::load_tokens("openai")
-                    .and_then(|t| t.get("email").and_then(|v| v.as_str()).map(String::from));
-            }
-            return Some(data);
+            apply_candidate_identity(&mut data, candidate);
+            results.push(data);
         }
     }
-    None
+    select_accounts(results)
+}
+
+fn apply_candidate_identity(data: &mut ProviderData, candidate: Candidate) {
+    if data.email.is_none() { data.email = candidate.email; }
+    if data.account_id.is_none() { data.account_id = candidate.account_id; }
+}
+
+fn select_accounts(mut results: Vec<ProviderData>) -> Option<ProviderData> {
+    if results.is_empty() { return None; }
+    let mut primary = results.remove(0);
+    if primary.connected {
+        primary.cli = results.into_iter().find(|cli| {
+            matches!((&primary.account_id, &cli.account_id), (Some(a), Some(b)) if a != b)
+        }).map(Box::new);
+    }
+    Some(primary)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::Engine;
+
+    fn jwt(claims: Value) -> String {
+        format!("header.{}.signature", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(claims.to_string()))
+    }
+
+    #[test]
+    fn candidate_keeps_its_own_id_token_email_and_rejects_expired_access() {
+        let auth = json!({"tokens": {"access_token": jwt(json!({"exp": 200})),
+            "id_token": jwt(json!({"email": "cli@example.test"})), "account_id": "cli-id"}});
+        let candidate = candidate_from_auth(&auth, 100).unwrap();
+        assert_eq!(candidate.email.as_deref(), Some("cli@example.test"));
+        assert_eq!(candidate.account_id.as_deref(), Some("cli-id"));
+        assert!(candidate_from_auth(&auth, 200).is_none());
+        assert!(candidate_from_auth(&json!({"tokens": {"id_token": "bad"}}), 100).is_none());
+    }
+
+    fn usage(id: &str, email: &str, connected: bool) -> ProviderData {
+        let mut data = ProviderData::new("live");
+        data.connected = connected;
+        data.account_id = Some(id.into());
+        data.email = Some(email.into());
+        data
+    }
+
+    #[test]
+    fn missing_usage_identity_is_filled_from_the_matching_candidate() {
+        let mut data = ProviderData::new("live");
+        apply_candidate_identity(&mut data, Candidate { access_token: "unused".into(),
+            account_id: Some("cli-id".into()), email: Some("cli@example.test".into()) });
+        assert_eq!(data.email.as_deref(), Some("cli@example.test"));
+        assert_eq!(data.account_id.as_deref(), Some("cli-id"));
+        let mut known = usage("api-id", "api@example.test", false);
+        apply_candidate_identity(&mut known, Candidate { access_token: "unused".into(),
+            account_id: Some("fallback-id".into()), email: Some("fallback@example.test".into()) });
+        assert_eq!(known.email.as_deref(), Some("api@example.test"));
+        assert_eq!(known.account_id.as_deref(), Some("api-id"));
+    }
+
+    #[test]
+    fn desktop_and_distinct_cli_accounts_keep_separate_emails() {
+        let data = select_accounts(vec![usage("desk", "desk@example.test", true),
+            usage("desk", "desk@example.test", false), usage("cli", "cli@example.test", false)]).unwrap();
+        assert_eq!(data.email.as_deref(), Some("desk@example.test"));
+        assert_eq!(data.cli.unwrap().email.as_deref(), Some("cli@example.test"));
+        let same = select_accounts(vec![usage("a", "a@example.test", true),
+            usage("a", "a@example.test", false)]).unwrap();
+        assert!(same.cli.is_none());
+        let only_cli = select_accounts(vec![usage("cli", "cli@example.test", false)]).unwrap();
+        assert!(!only_cli.connected);
+        assert_eq!(only_cli.email.as_deref(), Some("cli@example.test"));
+        assert!(only_cli.cli.is_none());
+    }
 }
