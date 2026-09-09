@@ -26,6 +26,10 @@ anyhow = "1"
 sha2 = "0.10"
 rand = "0.8"
 
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+objc2 = { version = "0.6", features = ["exception"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSException", "NSObjCRuntime", "NSString", "NSDictionary"] }
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
@@ -34,5 +38,7 @@ custom-protocol = ["tauri/custom-protocol"]
 codegen-units = 1
 lto = true
 opt-level = "s"
-panic = "abort"
+# Wry catches Objective-C exceptions when WebKit cancels a resource request.
+# Aborting prevents that catch from running and turns cancellation into SIGABRT.
+panic = "unwind"
 strip = true

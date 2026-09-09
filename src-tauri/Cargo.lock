@@ -1791,6 +1791,8 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "dirs 5.0.1",
+ "objc2",
+ "objc2-foundation",
  "rand 0.8.7",
  "regex",
  "reqwest 0.12.28",

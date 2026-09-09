@@ -69,6 +69,23 @@ cd src-tauri && cargo build --release
 Requires a Rust toolchain (`brew install rustup && rustup default stable`) and Xcode
 command line tools.
 
+Release builds must keep `panic = "unwind"`. On macOS, Wry catches Objective-C
+exceptions from cancelled WebKit resource requests; `panic = "abort"` prevents
+that handler from recovering and closes the entire app. See the
+[Objective-C bridge documentation](https://docs.rs/objc2/0.6.4/objc2/exception/fn.catch.html).
+
+Verify the release exception boundary on macOS with:
+
+```bash
+cd src-tauri
+cargo run --locked --release --example macos_protocol_exception
+```
+
+This exercises repeated native cancellation exceptions on a Tokio worker without
+opening a window or reading account data. It must run as an example executable:
+Cargo's test harness enables unwinding even when `cargo test --release` is used,
+so the ordinary tests alone cannot catch a regression in the release profile.
+
 ## Testing without stealing focus
 
 The Electron build can be driven headlessly over CDP
