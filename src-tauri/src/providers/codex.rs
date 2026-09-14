@@ -146,12 +146,13 @@ fn normalize(json: &Value, widget_login: bool) -> Option<ProviderData> {
     // clear a hit limit early (applicable = usable right now).
     let reset_credits = json.get("rate_limit_reset_credits").map(|r| {
         json!({
-            "available": r.get("available_count").and_then(|v| v.as_i64()).unwrap_or(0),
+            "available": r.get("available_count").and_then(|v| v.as_i64()).filter(|n| *n >= 0),
             "applicable": r.get("applicable_available_count").and_then(|v| v.as_i64()).unwrap_or(0),
         })
     });
 
     Some(ProviderData {
+        observed_at: None,
         source: "live".into(),
         // TRUE when the user signed in through the app itself. The UI shows
         // "Not connected (using CLI login)" off this flag, so hardcoding it
@@ -254,6 +255,16 @@ fn select_accounts(mut results: Vec<ProviderData>) -> Option<ProviderData> {
 mod tests {
     use super::*;
     use base64::Engine;
+
+    #[test]
+    fn missing_available_reset_count_is_unknown() {
+        for count in [Value::Null, json!(-1), json!("1"), json!(1.5), json!(0), json!(2)] {
+            let out = normalize(&json!({"rate_limit": {"primary_window": {"used_percent": 50}},
+                "rate_limit_reset_credits": {"available_count": count}}), true).unwrap();
+            let expected = count.as_i64().filter(|n| *n >= 0);
+            assert_eq!(out.reset_credits.unwrap()["available"], json!(expected));
+        }
+    }
 
     fn jwt(claims: Value) -> String {
         format!("header.{}.signature", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(claims.to_string()))

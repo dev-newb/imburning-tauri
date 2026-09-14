@@ -120,3 +120,9 @@ an unrendered window to a standstill, so anything the page schedules for itself
 — including the auto-fit passes — simply stops. A page-driven report never
 arrives and looks exactly like a broken frontend; a host-initiated
 `eval_with_callback` still runs. Hence the pull.
+
+## Confirmed reset sounds
+
+Scheduled rollovers and early resets both play the choir after a second fresh provider reading confirms the change. A cached reading or redraw cannot confirm a reset. Temporary zeros, missing bank counts and account changes stay quiet; the alert can arrive one refresh after the first reset reading.
+
+Electron and Tauri share `~/.imburning-alerts/claims.json` to suppress the same reset event for ten minutes when both are running. Separate accounts remain independent. `events.jsonl` in that directory records sound decisions and playback results, with a 1 MiB limit and one rotated backup. Account identifiers are hashed before writing; no emails or login tokens are recorded.

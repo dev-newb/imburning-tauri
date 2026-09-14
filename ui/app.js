@@ -394,14 +394,13 @@ function setupProviderSections() {
 
 // Event Listeners
 // ---- Alert sounds -------------------------------------------------------
-// Two events make noise: a limit clearing EARLY (a banked/immediate reset),
-// and the burn detector tripping. Either can be switched off, pointed at the
-// user's own file, or volume-adjusted in Settings.
+// Confirmed early or scheduled resets, banked credits, walls and burn spikes
+// have separate sound controls in Settings.
 const SOUND_DEFAULTS = {
     reset: { src: '../../assets/sounds/reset-default.mp3', label: 'Default (heavenly choir)' },
     burn: { src: '../../assets/sounds/burn-default.wav', label: 'Default (fire)' },
     // A banked weekly-limit reset arriving in the OpenAI account. Distinct
-    // from `reset` (a limit clearing early) because it is a different event —
+    // from `reset` (a confirmed quota reset) because it is a different event —
     // credit landing in the bank, not a window rolling over.
     banked: { src: '../../assets/sounds/banked-default.mp3', label: 'Default (banked reset)' },
     // A pool crossing to 100% — you just hit the wall. Bad news gets a thud,
@@ -427,18 +426,25 @@ async function resolveSoundSrc(kind) {
     _soundCache[kind] = { path: cfg.path, src: res.dataUrl };
     return res.dataUrl;
 }
-async function playAlertSound(kind, { force = false } = {}) {
+async function playAlertSound(kind, { force = false, events = [] } = {}) {
     const cfg = soundCfg(kind);
-    if (!force && cfg.enabled === false) return;
+    const report = (phase) => window.electronAPI.alertSoundEvent?.({ kind, phase, events });
+    if (!force && cfg.enabled === false) { await report('disabled')?.catch(() => {}); return; }
     try {
         const src = await resolveSoundSrc(kind);
+        if (!force && events.length) {
+            const claim = await report('claim')?.catch(err => { debugLog('[Sound] event log unavailable:', err.message); return null; });
+            if (claim && !claim.play) return;
+        }
         const prev = _soundPlaying[kind];
         if (prev) { try { prev.pause(); } catch (_) {} }
         const audio = new Audio(src);
         audio.volume = Math.min(Math.max(cfg.volume, 0), 1);
         _soundPlaying[kind] = audio;
         await audio.play();
+        await report(force ? 'preview' : 'played')?.catch(() => {});
     } catch (err) {
+        await report('failed')?.catch(() => {});
         debugLog('[Sound] playback failed:', err && err.message);
     }
 }
@@ -1284,7 +1290,7 @@ function appendCodexResetsRow(codexData, key, container, hiddenRows) {
     balPair.appendChild(balLabel);
     const balAmount = document.createElement('span');
     balAmount.className = 'resets-at-text extra-balance-amount';
-    balAmount.textContent = String(resets.available);
+    balAmount.textContent = resets.available == null ? '—' : String(resets.available);
     balPair.appendChild(balAmount);
     row.appendChild(balPair);
 
@@ -2827,7 +2833,8 @@ function dualPairsFor(company, data) {
         } : null;
         const resetInfo = (resets) => {
             if (!resets) return null;
-            const avail = resets.available ?? 0;
+            const avail = resets.available;
+            if (avail == null) return { kind: 'summary', text: '—', title: 'Reset count unavailable' };
             // A banked reset is a glowing orb everywhere else it appears (tall
             // rows, compact rows); wide mode showed a bare "1" instead, which
             // read as a count, not the same live token. Render the orbs here
@@ -3513,27 +3520,28 @@ function checkAccountAlerts(data) {
         seedAlertFlags(data);
     }
     checkUsageAlerts(data);
-    checkEarlyResets(data, changed);
+    checkResetAlerts(data, changed);
 }
 
-// ---- Early-reset fanfare -------------------------------------------------
-// A limit dropping to zero is only worth celebrating when it happens BEFORE
-// the provider said it would — an OpenAI reset (banked or applied straight
-// away) or the Anthropic equivalent. A pool rolling over on schedule is just
-// Tuesday. Both states are remembered per refresh so the two can be told
-// apart; the bank count is watched too, since a banked reset arriving is its
-// own good news even before it is spent.
-const EARLY_RESET_FROM = 5;   // was at least this full…
-const EARLY_RESET_TO = 1;     // …and came back essentially empty
-let _resetWatch = null;       // null until seeded — never fires on first load
-let _resetBank = null;
-let _blockedKeys = null;      // pool keys currently at 100% (wall tracking)
+// Reset detection uses confirmed provider samples, including scheduled rollovers.
+const _resetTracker = window.BurnwatchResetAlerts.createTracker();
 
 function resetWatchPools(data) {
-    const out = [];
+    const accounts = alertAccountIdentities(data);
+    const feed = (key) => ({ codex: data.codex, codexCli: data.codex?.cli,
+        gemini: data.gemini, geminiCli: data.gemini?.cli,
+        claudeCli: data.claude_code, anthropic: data })[alertPoolAccount(key)];
+    const out = new Map();
     const add = (key, pct, resetsAt, label) => {
-        if (pct == null || !isFinite(pct)) return;
-        out.push({ key, pct, resetsAt: Date.parse(resetsAt || ''), label: label || key });
+        const value = feed(key);
+        const provider = alertPoolAccount(key);
+        const account = provider === 'anthropic'
+            ? ['anthropic', credentials?.organizationId || data.anthropic_email || '']
+            : [provider.replace('Cli', ''), value?.accountId || String(value?.email || '').trim().toLowerCase()];
+        out.set(key, { key, pct, resetsAt: Date.parse(resetsAt || ''), label: label || key,
+            identity: accounts[provider], account,
+            pool: key.replace(/^(codex|gemini)_(cli_)?/, '$1_').replace(/^cc_/, ''),
+            observedAt: ['session', 'snapshot'].includes(value?.source) ? null : value?.observedAt });
     };
     add('five_hour', data.five_hour?.utilization, data.five_hour?.resets_at, 'Claude Session (5h)');
     add('seven_day', data.seven_day?.utilization, data.seven_day?.resets_at, 'Claude Models (7d)');
@@ -3549,51 +3557,20 @@ function resetWatchPools(data) {
             add(prefix + lim.key, lim.percent, lim.resetsAt || lim.resets_at, brand + (lim.label || lim.key));
         }
     }
-    return out;
+    return [...out.values()];
 }
 
-function checkEarlyResets(data, changedAccounts = new Set()) {
+function checkResetAlerts(data, changedAccounts = new Set()) {
     const pools = resetWatchPools(data);
-    const bank = data.codex?.resetCredits?.available ?? null;
-
-    if (_resetWatch) {
-        for (const key of Object.keys(_resetWatch)) {
-            if (changedAccounts.has(alertPoolAccount(key))) {
-                delete _resetWatch[key];
-                _blockedKeys?.delete(key);
-            }
-        }
-    }
-    if (changedAccounts.has('codex')) _resetBank = null;
-
-    if (_resetWatch === null) {          // first load: just take the baseline
-        _resetWatch = {};
-        for (const p of pools) _resetWatch[p.key] = p;
-        _resetBank = bank;
-        // Seed the blocked set too — a pool already at 100% when the app
-        // launches must not fire "hit the wall" on the first refresh.
-        _blockedKeys = new Set(pools.filter((p) => p.pct >= 100).map((p) => p.key));
-        return;
-    }
-
-    const now = Date.now();
-    let freed = false;
-    let wallPool = null;
-    for (const p of pools) {
-        const prev = _resetWatch[p.key];
-        _resetWatch[p.key] = p;
-        if (!prev) continue;
-        // Hitting the wall: a pool crossing from usable to 100% between two
-        // refreshes. Independent of the reset/banked events below — bad news
-        // does not queue behind good news.
-        if (prev.pct < 100 && p.pct >= 100 && !wallPool) wallPool = p;
-        if (!(prev.pct >= EARLY_RESET_FROM && p.pct <= EARLY_RESET_TO)) continue;
-        // Only early if the reset the provider promised was still in the future
-        if (!isFinite(prev.resetsAt) || prev.resetsAt <= now) continue;
-        freed = true;
-    }
-
-    const nowBlocked = new Set(pools.filter((p) => p.pct >= 100).map((p) => p.key));
+    const banks = ['codex', 'codexCli'].flatMap(provider => {
+        const value = provider === 'codex' ? data.codex : data.codex?.cli;
+        const pool = pools.find(p => alertPoolAccount(p.key) === provider);
+        return pool ? [{ ...pool, key: (provider === 'codex' ? 'codex_' : 'codex_cli_') + 'bank', pool: 'reset-credits', count: value?.resetCredits?.available }] : [];
+    });
+    _resetTracker.forget([...pools, ...banks].filter(p => changedAccounts.has(alertPoolAccount(p.key))).map(p => p.key));
+    const interval = Number(window._cachedSettings?.refreshInterval || 300) * 1000;
+    const events = _resetTracker.observe(pools, banks, interval * 3);
+    const wallPool = events.wall[0];
     if (wallPool) {
         playAlertSound('wall');
         const when = isFinite(wallPool.resetsAt)
@@ -3602,24 +3579,11 @@ function checkEarlyResets(data, changedAccounts = new Set()) {
             : '';
         window.electronAPI.showNotification('Limit reached — ' + wallPool.label,
             wallPool.label + ' is at 100%.' + when);
-    } else if (_blockedKeys && _blockedKeys.size > 0 && nowBlocked.size === 0
-        && [..._blockedKeys].every((key) => pools.some((p) => p.key === key))) {
-        // Every wall the user had hit has cleared — worth a heads-up (the
-        // reset itself already made its sound; this is the notification).
+    } else if (events.recovered) {
         window.electronAPI.showNotification("I'm Burning!", 'Usage is available again.');
     }
-    _blockedKeys = nowBlocked;
-    // A missing pool must not reappear later as an apparent crossing/reset.
-    _resetWatch = Object.fromEntries(pools.map((p) => [p.key, p]));
-
-    const banked = bank != null && _resetBank != null && bank > _resetBank;
-    _resetBank = bank;
-
-    // A limit clearing early and a banked reset landing are different events,
-    // so they get different sounds. If somehow both happen on one refresh,
-    // the banked one wins — it is the rarer, more notable event.
-    if (banked) { playAlertSound('banked'); return; }
-    if (freed) playAlertSound('reset');
+    if (events.reset.length) playAlertSound('reset', { events: events.reset });
+    if (events.banked.length) playAlertSound('banked', { events: events.banked });
 }
 
 

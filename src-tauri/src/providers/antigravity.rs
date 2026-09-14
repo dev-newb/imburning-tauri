@@ -366,6 +366,7 @@ pub fn normalize(json: &Value) -> Option<ProviderData> {
         return None;
     }
     Some(ProviderData {
+        observed_at: None,
         source: "antigravity".into(),
         connected: true,
         email: None,
@@ -392,7 +393,9 @@ fn last_good(store: &crate::store::Store) -> Option<ProviderData> {
     if chrono::Utc::now().timestamp_millis() - at > LAST_GOOD_MAX {
         return None;
     }
-    serde_json::from_value(saved.get("data")?.clone()).ok()
+    let mut data: ProviderData = serde_json::from_value(saved.get("data")?.clone()).ok()?;
+    data.observed_at = Some(at);
+    Some(data)
 }
 
 /// Fetch, falling back to the last good result rather than blanking the
@@ -443,7 +446,8 @@ pub async fn fetch(client: &reqwest::Client, store: &crate::store::Store) -> Opt
     }
 
     match fetch_live(client).await {
-        Some(fresh) => {
+        Some(mut fresh) => {
+            fresh.observed_at = Some(chrono::Utc::now().timestamp_millis());
             if let Ok(value) = serde_json::to_value(&fresh) {
                 store.set(
                     "antigravityLastGood",

@@ -49,9 +49,17 @@ impl Cache {
                 return serde_json::from_value(value).ok();
             }
         }
-        let data = fetch.await;
-        self.put(key, serde_json::to_value(&data).unwrap_or(Value::Null));
-        data
+        let mut value = serde_json::to_value(fetch.await).unwrap_or(Value::Null);
+        if value.is_object() {
+            if value["observedAt"].is_null() {
+                value["observedAt"] = json!(chrono::Utc::now().timestamp_millis());
+            }
+            if value.get("cli").is_some_and(Value::is_object) {
+                value["cli"]["observedAt"] = value["observedAt"].clone();
+            }
+        }
+        self.put(key, value.clone());
+        if value.is_null() { None } else { serde_json::from_value(value).ok() }
     }
 }
 
@@ -190,6 +198,7 @@ pub async fn fetch_all(
 
     if let Some(web) = web_usage {
         copy_anthropic_pools(&mut data, &web);
+        data["observedAt"] = json!(chrono::Utc::now().timestamp_millis());
         data["anthropic_source"] = json!("web");
         data["claude_code_same_account"] = json!(true);
         if let Some(app) = app {
@@ -199,6 +208,7 @@ pub async fn fetch_all(
         }
     } else if let Some(cc) = anthropic {
         copy_anthropic_pools(&mut data, &cc);
+        data["observedAt"] = cc.get("observedAt").cloned().unwrap_or(Value::Null);
         data["anthropic_source"] = json!("cli");
         data["claude_code_same_account"] = json!(true);
     }
@@ -269,6 +279,18 @@ mod cache_tests {
         assert_eq!(cache.provider("codex", true, fetch()).await.unwrap()["percent"], 2);
         cache.clear();
         assert_eq!(cache.provider("codex", false, fetch()).await.unwrap()["percent"], 3);
+    }
+
+    #[tokio::test]
+    async fn cache_preserves_observation_times_including_last_good_and_cli() {
+        let cache = Cache::new();
+        let first = cache.provider("codex", false, async { Some(json!({"limits":[], "cli":{"limits":[]}})) }).await.unwrap();
+        assert!(first["observedAt"].as_i64().unwrap() > 0);
+        assert_eq!(first["observedAt"], first["cli"]["observedAt"]);
+        let cached = cache.provider::<Value>("codex", false, async { panic!("must stay cached") }).await.unwrap();
+        assert_eq!(cached["observedAt"], first["observedAt"]);
+        let saved = cache.provider("google", false, async { Some(json!({"observedAt":123, "limits":[]})) }).await.unwrap();
+        assert_eq!(saved["observedAt"], 123);
     }
 
     #[tokio::test]

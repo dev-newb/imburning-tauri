@@ -278,6 +278,7 @@ pub async fn fetch(client: &reqwest::Client, cli_allowed: bool) -> Option<Provid
     let quota = post(client, &token, "retrieveUserQuota", payload).await?;
     let limits = normalize(&quota)?;
     Some(ProviderData {
+        observed_at: None,
         source: "live".into(),
         connected: widget_login,
         email,

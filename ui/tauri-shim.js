@@ -110,6 +110,7 @@
       if (!path) return { ok: false, canceled: true };
       return { ok: true, path, name: String(path).split('/').pop() };
     },
+    alertSoundEvent: (request) => invoke('alert_sound_event', { request }),
     readSoundFile: (path) => invoke('read_sound_file', { path: String(path || '') }),
 
     // ---- updates ----

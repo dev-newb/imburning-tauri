@@ -20,6 +20,8 @@ pub struct Limit {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderData {
+    #[serde(rename = "observedAt", default, skip_serializing_if = "Option::is_none")]
+    pub observed_at: Option<i64>,
     pub source: String,
     pub connected: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -43,6 +45,7 @@ pub struct ProviderData {
 impl ProviderData {
     pub fn new(source: &str) -> Self {
         ProviderData {
+            observed_at: None,
             source: source.into(),
             connected: false,
             email: None,

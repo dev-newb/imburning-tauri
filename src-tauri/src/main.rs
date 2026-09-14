@@ -18,6 +18,7 @@ mod store;
 mod text;
 mod tray;
 mod usage;
+mod alert_events;
 
 use serde_json::{json, Value};
 use store::Store;
@@ -1080,6 +1081,14 @@ async fn export_history(app: tauri::AppHandle, format: String) -> Value {
 /// a data: URL rather than opening the CSP up to arbitrary file: reads — the
 /// same reasoning as the Electron build.
 #[tauri::command]
+async fn alert_sound_event(request: Value) -> Result<Value, String> {
+    let root = dirs::home_dir().ok_or("Home directory unavailable")?.join(".imburning-alerts");
+    tauri::async_runtime::spawn_blocking(move || {
+        alert_events::record(&root, "tauri", &request, chrono::Utc::now().timestamp_millis()).map_err(|e| e.to_string())
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 fn read_sound_file(path: String) -> Value {
     use base64::Engine;
     if path.is_empty() {
@@ -1456,6 +1465,7 @@ fn main() {
             set_compact_mode,
             set_min_height,
             read_sound_file,
+            alert_sound_event,
             apply_window_preset,
             send_alert_webhook,
             settings_fit,
