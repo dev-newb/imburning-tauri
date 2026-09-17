@@ -72,7 +72,7 @@
                     state.pending = null;
                     if (stillReset) {
                         const resetEvent = event('reset', before, p, pending.reason);
-                        if (pending.reason === 'scheduled' && isFiveHourPool(p)) {
+                        if (isFiveHourPool(p)) {
                             result.suppressed.push(resetEvent);
                         } else {
                             result.reset.push(resetEvent);
