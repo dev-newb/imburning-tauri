@@ -9,7 +9,7 @@ pub fn record(root: &Path, app: &str, request: &Value, now: i64) -> std::io::Res
     let kind = request["kind"].as_str().unwrap_or("");
     let phase = request["phase"].as_str().unwrap_or("");
     if !["reset", "banked", "wall", "burn"].contains(&kind)
-        || !["claim", "played", "failed", "disabled", "preview"].contains(&phase) {
+        || !["claim", "played", "failed", "disabled", "preview", "suppressed"].contains(&phase) {
         return Ok(json!({"play": false}));
     }
     let mut events = Vec::new();
@@ -95,6 +95,19 @@ mod tests {
         assert_eq!(record(&root, "tauri", &request, 1000002).unwrap()["play"], true);
         assert_eq!(record(&root, "electron", &request, 1600003).unwrap()["play"], true);
         assert!(!fs::read_to_string(root.join("events.jsonl")).unwrap().contains("private@example.test"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn suppressed_reset_is_logged_without_claiming_playback() {
+        let root = std::env::temp_dir().join(format!("imburning-suppressed-test-{}", rand::random::<u64>()));
+        let request = json!({"kind":"reset","phase":"suppressed","events":[{
+            "key":"account:five_hour","pool":"five_hour","reason":"scheduled","from":45,"to":0
+        }]});
+        assert_eq!(record(&root, "tauri", &request, 1_000_000).unwrap()["play"], false);
+        assert_eq!(fs::read_to_string(root.join("claims.json")).unwrap(), "{}");
+        let log = fs::read_to_string(root.join("events.jsonl")).unwrap();
+        assert!(log.contains("\"phase\":\"suppressed\""));
         fs::remove_dir_all(root).unwrap();
     }
 }

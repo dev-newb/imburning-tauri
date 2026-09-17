@@ -6,7 +6,14 @@
     'use strict';
     const MAX_GAP = 30 * 60 * 1000;
     const CLOCK_MARGIN = 60 * 1000;
+    const FIVE_HOUR_WINDOW_MINUTES = 5 * 60;
     const valid = (n) => typeof n === 'number' && Number.isFinite(n);
+    const isFiveHourPool = (pool) => {
+        if (valid(pool.windowMinutes) && Math.round(pool.windowMinutes) === FIVE_HOUR_WINDOW_MINUTES) return true;
+        const key = String(pool.key || '');
+        return key === 'five_hour' || key.endsWith('_five_hour')
+            || key.includes('_five_hour_') || /\(5h\)/i.test(String(pool.label || ''));
+    };
 
     function createTracker() {
         const limits = new Map(), credits = new Map();
@@ -50,7 +57,7 @@
             synchronize(limits, pools);
             synchronize(credits, banks);
             const blocked = [...limits.values()].filter(s => s.current.pct >= 100).map(s => s.current.key);
-            const result = { reset: [], banked: [], wall: [], recovered: false };
+            const result = { reset: [], suppressed: [], banked: [], wall: [], recovered: false };
             for (const p of pools) {
                 const state = advance(limits, p, valid(p.pct) && p.pct >= 0, maxGap);
                 if (!state) continue;
@@ -64,7 +71,12 @@
                         : sameWindow && p.pct <= Math.max(1, before.pct / 2);
                     state.pending = null;
                     if (stillReset) {
-                        result.reset.push(event('reset', before, p, pending.reason));
+                        const resetEvent = event('reset', before, p, pending.reason);
+                        if (pending.reason === 'scheduled' && isFiveHourPool(p)) {
+                            result.suppressed.push(resetEvent);
+                        } else {
+                            result.reset.push(resetEvent);
+                        }
                         state.current = p;
                         continue;
                     }

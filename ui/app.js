@@ -3532,7 +3532,7 @@ function resetWatchPools(data) {
         gemini: data.gemini, geminiCli: data.gemini?.cli,
         claudeCli: data.claude_code, anthropic: data })[alertPoolAccount(key)];
     const out = new Map();
-    const add = (key, pct, resetsAt, label) => {
+    const add = (key, pct, resetsAt, label, windowMinutes) => {
         const value = feed(key);
         const provider = alertPoolAccount(key);
         const account = provider === 'anthropic'
@@ -3541,12 +3541,14 @@ function resetWatchPools(data) {
         out.set(key, { key, pct, resetsAt: Date.parse(resetsAt || ''), label: label || key,
             identity: accounts[provider], account,
             pool: key.replace(/^(codex|gemini)_(cli_)?/, '$1_').replace(/^cc_/, ''),
+            windowMinutes,
             observedAt: ['session', 'snapshot'].includes(value?.source) ? null : value?.observedAt });
     };
-    add('five_hour', data.five_hour?.utilization, data.five_hour?.resets_at, 'Claude Session (5h)');
-    add('seven_day', data.seven_day?.utilization, data.seven_day?.resets_at, 'Claude Models (7d)');
+    add('five_hour', data.five_hour?.utilization, data.five_hour?.resets_at, 'Claude Session (5h)', 300);
+    add('seven_day', data.seven_day?.utilization, data.seven_day?.resets_at, 'Claude Models (7d)', 10080);
     for (const key of Object.keys(EXTRA_ROW_CONFIG)) {
-        if (data[key]) add(key, data[key].utilization, data[key].resets_at, EXTRA_ROW_CONFIG[key].label);
+        if (data[key]) add(key, data[key].utilization, data[key].resets_at,
+            EXTRA_ROW_CONFIG[key].label, data[key].windowMinutes);
     }
     const feeds = [
         ['codex_', data.codex?.limits, 'OpenAI '], ['codex_cli_', data.codex?.cli?.limits, 'OpenAI CLI '],
@@ -3554,7 +3556,8 @@ function resetWatchPools(data) {
     ];
     for (const [prefix, list, brand] of feeds) {
         for (const lim of (list || [])) {
-            add(prefix + lim.key, lim.percent, lim.resetsAt || lim.resets_at, brand + (lim.label || lim.key));
+            add(prefix + lim.key, lim.percent, lim.resetsAt || lim.resets_at,
+                brand + (lim.label || lim.key), lim.windowMinutes);
         }
     }
     return [...out.values()];
@@ -3583,6 +3586,11 @@ function checkResetAlerts(data, changedAccounts = new Set()) {
         window.electronAPI.showNotification("I'm Burning!", 'Usage is available again.');
     }
     if (events.reset.length) playAlertSound('reset', { events: events.reset });
+    if (events.suppressed.length) {
+        const log = window.electronAPI.alertSoundEvent?.({ kind: 'reset', phase: 'suppressed',
+            events: events.suppressed });
+        log?.catch(() => {});
+    }
     if (events.banked.length) playAlertSound('banked', { events: events.banked });
 }
 
