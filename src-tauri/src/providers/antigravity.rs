@@ -404,10 +404,12 @@ fn last_good(store: &crate::store::Store) -> Option<ProviderData> {
 /// user an empty Google section every time that happens.
 async fn google_email(client: &reqwest::Client, access: &str) -> Option<String> {
     use std::sync::Mutex;
-    static CACHE: Mutex<Option<String>> = Mutex::new(None);
+    static CACHE: Mutex<Option<(String, String)>> = Mutex::new(None);
     if let Ok(c) = CACHE.lock() {
-        if c.is_some() {
-            return c.clone();
+        if let Some((token, email)) = c.as_ref() {
+            if token == access {
+                return Some(email.clone());
+            }
         }
     }
     let res = client
@@ -416,9 +418,11 @@ async fn google_email(client: &reqwest::Client, access: &str) -> Option<String> 
         .send()
         .await
         .ok()?;
-    let email = res.json::<Value>().await.ok()?.get("email")?.as_str()?.to_string();
+    if !res.status().is_success() { return None; }
+    let email = res.json::<Value>().await.ok()?.get("email")?.as_str()?.trim().to_string();
+    if email.is_empty() { return None; }
     if let Ok(mut c) = CACHE.lock() {
-        *c = Some(email.clone());
+        *c = Some((access.to_string(), email.clone()));
     }
     Some(email)
 }
@@ -470,17 +474,18 @@ async fn fetch_live(client: &reqwest::Client) -> Option<ProviderData> {
     if access.is_none() {
         access = refresh_token(client, &token.refresh).await;
     }
-    let access = access?;
+    let mut access = access?;
     let mut json = fetch_models(client, &access).await;
     if json.is_none() {
         // A stored token can be rejected even before its stated expiry.
         if let Some(fresh) = refresh_token(client, &token.refresh).await {
-            json = fetch_models(client, &fresh).await;
+            access = fresh;
+            json = fetch_models(client, &access).await;
         }
     }
     let mut data = normalize(&json?)?;
     // The agy token carries no id_token, so the account email comes from
-    // Google's userinfo endpoint — one cheap call, cached for the process.
+    // Google's userinfo endpoint, cached only for the matching access token.
     data.email = google_email(client, &access).await;
     Some(data)
 }

@@ -2480,8 +2480,17 @@ body.tall .progress-bar { min-width: 56px; }
     text-transform: uppercase;
     font-size: 8px;
 }
-.compact-ribbon-email { overflow: hidden; text-overflow: ellipsis; }
+.compact-ribbon-provider { order: -2; flex-shrink: 0; }
+.compact-ribbon-email {
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .compact-ribbon-badge {
+    order: -1;
+    flex-shrink: 0;
     padding: 0 4px;
     border-radius: 3px;
     background: rgba(255, 255, 255, 0.08);
