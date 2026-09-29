@@ -4,7 +4,15 @@ A port of [I'm Burning! (Electron)](https://github.com/dev-newb/imburning-electr
 Electron and onto Tauri. Same widget, same UI, no bundled Chromium: on macOS it renders
 in WKWebView, on Windows in WebView2, on Linux in WebKitGTK.
 
-![I'm Burning! (Tauri) — portrait view: Anthropic, OpenAI, and Google sections with account emails, banked-reset orb, and the prediction graph](docs/screenshot-portrait.png)
+<p align="center">
+  <img src="docs/screenshot-portrait.png" width="520" alt="Shared interface with fictional accounts, token fire, maxed-pool smoke, reset orbs, a frozen provider and history">
+</p>
+
+The shared interface, captured in Electron with fictional accounts. [Full screenshot and animation gallery](https://github.com/dev-newb/imburning-electron/blob/main/assets/demos/README.md) includes transparent PNGs, animated previews, and videos of company removal, row hiding, and both token-burning styles.
+
+| Compact | Wide |
+| --- | --- |
+| ![Compact interface with fictional account emails](docs/screenshot-compact.png) | ![Wide interface with three provider columns](docs/screenshot-wide.png) |
 
 ## Why
 

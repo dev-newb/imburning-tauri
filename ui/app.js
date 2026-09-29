@@ -1970,7 +1970,8 @@ function detonateProvider(prov) {
     }
     const t0 = performance.now();
     (function tick(now) {
-        const t = (now - t0) / 1000;
+        // A frame timestamp can precede the event that started this effect.
+        const t = Math.max(0, now - t0) / 1000;
         ctx.clearRect(0, 0, sr.width + PAD * 2, sr.height + PAD * 2);
         let alive = false;
         for (const p of parts) {
