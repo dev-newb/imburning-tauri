@@ -1151,6 +1151,13 @@ const EXTRA_ROW_CONFIG = {
 // a count for a pool the API stopped reporting.
 const _availableRowKeys = new Set();
 
+function formatCreditBalance(balance) {
+    const value = Number(balance ?? 0);
+    return (Number.isFinite(value) ? value : 0).toLocaleString('en-US', {
+        minimumFractionDigits: 1, maximumFractionDigits: 1
+    });
+}
+
 function appendCodexCreditsRow(codexData, key, container, hiddenRows) {
     const credits = codexData?.credits;
     if (!credits || !(codexData.limits || []).length) return;
@@ -1176,6 +1183,7 @@ function appendCodexCreditsRow(codexData, key, container, hiddenRows) {
     barGroup.className = 'usage-bar-group';
     const approx = document.createElement('span');
     approx.className = 'credits-approx';
+    approx.title = 'OpenAI-provided estimates of local and cloud messages available from your credits, not messages already sent.';
     const fmtRange = (range) => (Array.isArray(range) && range.length === 2)
         ? (range[0] === range[1] ? String(range[0]) : `${range[0]}–${range[1]}`)
         : null;
@@ -1204,7 +1212,7 @@ function appendCodexCreditsRow(codexData, key, container, hiddenRows) {
     balPair.appendChild(balLabel);
     const balAmount = document.createElement('span');
     balAmount.className = 'resets-at-text extra-balance-amount';
-    balAmount.textContent = credits.unlimited ? 'unlimited' : String(credits.balance ?? 0);
+    balAmount.textContent = credits.unlimited ? 'unlimited' : formatCreditBalance(credits.balance);
     balPair.appendChild(balAmount);
     row.appendChild(balPair);
 
@@ -2829,8 +2837,8 @@ function dualPairsFor(company, data) {
         const total = (k) => k.includes('seven_day') ? 10080 : 300;
         const creditInfo = (credits) => credits ? {
             kind: 'summary',
-            text: credits.unlimited ? '∞' : String(credits.balance ?? 0),
-            title: credits.unlimited ? 'Unlimited account credits' : `${credits.balance ?? 0} account credits`
+            text: credits.unlimited ? '∞' : formatCreditBalance(credits.balance),
+            title: credits.unlimited ? 'Unlimited account credits' : `${formatCreditBalance(credits.balance)} account credits`
         } : null;
         const resetInfo = (resets) => {
             if (!resets) return null;
