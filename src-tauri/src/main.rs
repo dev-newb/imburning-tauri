@@ -1125,6 +1125,30 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // Public menu labels are independent of the stable storage identity.
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{AboutMetadata, Menu, PredefinedMenuItem, Submenu};
+                let menu = Menu::default(app.handle())?;
+                let application = Submenu::with_items(app, "I'm Burning", true, &[
+                    &PredefinedMenuItem::about(app, Some("About I'm Burning"), Some(AboutMetadata {
+                        name: Some("I'm Burning".into()),
+                        version: Some(app.package_info().version.to_string()),
+                        ..Default::default()
+                    }))?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::services(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::hide(app, Some("Hide I'm Burning"))?,
+                    &PredefinedMenuItem::hide_others(app, None)?,
+                    &PredefinedMenuItem::show_all(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::quit(app, Some("Quit I'm Burning"))?,
+                ])?;
+                menu.remove_at(0)?;
+                menu.prepend(&application)?;
+                app.set_menu(menu)?;
+            }
             // Verification runs must never take focus from the user. As an
             // Accessory app the process cannot become active, so neither the
             // main window nor the graph window can steal the front — which is
